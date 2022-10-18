@@ -1,0 +1,221 @@
+.\" Manpage for synce4l.
+.\" Contact arkadiusz.kubalewski@intel.com or michal.michalik@intel.com to
+.\" correct errors or typos.
+.TH man 8 "27 Oct 2022" "1.0" "synce4l man page"
+
+.SH NAME
+synce4l \- Synchronous Ethernet (SyncE) controller application
+
+.SH SYNOPSIS
+synce4l -f [file] [-l <num>] [-m] [-q] [-v] [-h]
+
+.SH DESCRIPTION
+synce4l is an implementation of the Synchronous Ethernet (SyncE) protocol
+according to ITU-T Rec. G.8264. The design goal is to provide logic to supported
+hardware by processing Ethernet Synchronization Messaging Channel (ESMC) and
+control Ethernet Equipment Clock (EEC) on Network Card Interface (NIC).
+.P
+Application can operate in two mutually exclusive modes: line or external.
+
+.TP
+External input mode
+If `synce4l` is configured to run in external input mode then EEC needs to
+have external 1PPS source attached (GPS or other generator).
+In this scenario `synce4l` always broadcasts clock quality level (QL) defined
+in configuration file. Additionally, for external input mode incoming SyncE
+frames do not participate in best source selection algorithm for EEC.
+
+.TP
+Line input mode
+In line input mode incoming SyncE frames are processed and best clock source is
+extracted from the link having the best quality level.
+`synce4l` configures such "best quality" port as a source to recover clock for
+EEC. The recovered QL is broadcasted to all other interfaces then.
+An external clock source cannot be used in this mode.
+
+.SH OPTIONS
+.TP
+.B \-f [file]
+read configuration from 'file' (config file takes precedence over
+command line arguments)
+.TP
+.B \-l [num]
+set the logging level to 'num' (0: least detailed, 7: most detailed)
+.TP
+.B \-m
+print messages to stdout
+.TP
+.B \-q
+do not print messages to the syslog
+.TP
+.B \-v
+print synce4l version and exit
+.TP
+.B \-h
+print this message and exit
+
+.SH CONFIGURATION FILE
+Configuration file contains three sections:
+.IP -
+global,
+.IP -
+device,
+.IP -
+port.
+
+.SS Global section
+This section starts with `[global]` keyword. It sets the logging options.
+.RS
+Available options:
+.IP logging_level
+Minimum log level required to appear in a log.
+.P
+.RS
+Defaults to 6, valid values are 0 - 7
+.RE
+.IP message_tag
+Tag reported in a log.
+.IP use_syslog
+Set to 1 if `syslog` should be used.
+.P
+.RS
+Defaults to 1, valid values are 0 or 1
+.RE
+.IP verbose
+Set to 1 to log extra information.
+.P
+.RS
+Defaults to 0, valid values are 0 or 1
+.RE
+.RE
+
+.SS Device section
+This section specifies the configuration of a one logical device e.g. 'synce1'.
+The name is defined by the user. The name has no impact for any functionality
+except traces.
+The name must be enclosed in extra angle bracket when defining new device
+section e.g. [<synce1>].
+All ports defined by port sections after the device section will create one
+SyncE device (until next device section).
+.RS
+Available options:
+.IP input_mode
+Set to "line" to enable line input mode, set "external" for external input mode.
+.P
+.RS
+Defaults to "line", valid values are "line" or "external"
+.RE
+.IP external_input_QL
+Quality Level (QL) for "external input" mode.
+.P
+.RS
+Valid values specified in ITU-T Recommendations
+.RE
+.IP external_input_ext_QL
+Extended Quality Level for "external input" mode.
+.P
+.RS
+Valid values specified in ITU-T Recommendations
+.RE
+.IP extended_tlv
+Set to 1 to enable extended QL.
+.P
+.RS
+Defaults to 0, valid values are 0 or 1
+.RE
+.IP network_option
+Network option according to T-REC-G.8264. All devices in SyncE domain
+should have the same option configured.
+.P
+.RS
+Defaults to 1, valid values are 1 or 2
+.RE
+.IP recover_time
+Seconds indicating the minimum time to recover from the QL-failed state on the port.
+.P
+.RS
+Defaults to 60, valid values are 10 - 720
+.RE
+.IP get_eec_state_cmd
+Defines a shell command which will be executed by synce4l to acquire current
+state of a SyncE EEC on the device. Separated command must be provided by the
+user for each device confgured for frequency synchronization. The command shall
+output current state of EEC to stdout, expected values are defined (also by the
+user) with following configuration items:
+eec_holdover_value, eec_locked_ho_value, eec_locked_value,
+eec_freerun_value, eec_invalid_value.
+.RS
+.RE
+.IP eec_holdover_value
+Defines a string value expected on stdout stream when EEC is in HOLDOVER state.
+.P
+.RS
+.RE
+.IP eec_locked_ho_value
+Defines a string value expected on stdout stream when EEC is in LOCKED HOLDOVER
+state.
+.P
+.RS
+.RE
+.IP eec_locked_value
+Defines a string value expected on stdout stream when EEC is in LOCKED state.
+.P
+.RS
+.RE
+.IP eec_freerun_value
+Defines a string value expected on stdout stream when EEC is in FREERUN state.
+.P
+.RS
+.RE
+.IP eec_invalid_value
+Defines a string value expected on stdout stream when EEC is in INVALID state.
+.P
+.RE
+
+.SS Port section
+Any other section not starting with `<` (e.g. [eth0]) is the port section.
+Multiple port sections are allowed. Each port participates in SyncE
+communication.
+.RS
+Available options:
+.IP tx_heartbeat_msec
+Interval between consecutive SyncE frame transmissions (1000ms recommended).
+.P
+.RS
+Defaults to 1000, valid values are 100 - 3000
+.RE
+.IP rx_heartbeat_msec
+Interval between consecutive SyncE socket polls (frame receive).
+.P
+.RS
+Defaults to 50, valid values are 10 - 500
+.RE
+.IP recover_clock_enable_cmd
+A shell command which enables PHY port pointed by this Port section as a source
+of frequency for the SyncE EEC on this device (required only in
+"internal input" mode).
+.RS
+.RE
+.IP recover_clock_disable_cmd
+A shell command which disables PHY port pointed by this Port section as a source
+of frequency for the SyncE EEC on this device (required only in
+"internal input" mode).
+.IP allowed_qls
+List of integers containing allowed SSM QLs separated by comma (`,`), other
+received ones would be discarded. If parameter is not provided, all QLs will be
+accepted.
+.P
+.IP allowed_ext_qls
+List of integers containing allowed extended SSM QLs separated by comma (`,`),
+other received ones would be discarded. If parameter is not provided, all QLs will
+be accepted.
+.P
+.RE
+
+.SH BUGS
+No known bugs.
+
+.SH AUTHOR
+Arkadiusz Kubalewski <arkadiusz.kubalewski@intel.com>
+.P
+Michal Michalik <michal.michalik@intel.com>
