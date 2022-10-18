@@ -42,4 +42,28 @@ void interface_destroy(struct interface *iface);
  */
 const char *interface_name(struct interface *iface);
 
+/**
+ * Set the synce parent device for a given interface.
+ * @param iface      The interface of interest.
+ * @param dev_name   The desired label for the interface.
+ */
+void interface_se_set_parent_dev(struct interface *iface, const char *dev_name);
+
+/**
+ * Obtain the name of the parent synce device to which an interface belongs.
+ * The parent device must provde an interface to control device-level synce
+ * configuration.
+ * @param iface  The interface of interest.
+ * @return       Name of the parent synce device
+ */
+const char *interface_se_get_parent_dev_label(struct interface *iface);
+
+/**
+ * Tests whether an interface has a synce parent device.
+ * Which means it is regular port configured for synce.
+ * @param iface  The interface of interest.
+ * @return       True if the interface is a synce parent device
+ */
+bool interface_se_has_parent_dev(struct interface *iface);
+
 #endif

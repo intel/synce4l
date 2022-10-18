@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include "interface.h"
 
+#define HAS_SYNCE_PARENT (1 << 0)
+
 struct interface {
 	STAILQ_ENTRY(interface) list;
 	char name[MAX_IFNAME_SIZE + 1];
@@ -37,4 +39,20 @@ void interface_destroy(struct interface *iface)
 const char *interface_name(struct interface *iface)
 {
 	return iface->name;
+}
+
+void interface_se_set_parent_dev(struct interface *iface, const char *dev_name)
+{
+	strncpy(iface->synce_parent_label, dev_name, MAX_IFNAME_SIZE);
+	iface->synce_flags |= HAS_SYNCE_PARENT;
+}
+
+const char *interface_se_get_parent_dev_label(struct interface *iface)
+{
+	return iface->synce_parent_label;
+}
+
+bool interface_se_has_parent_dev(struct interface *iface)
+{
+	return !!(iface->synce_flags & HAS_SYNCE_PARENT);
 }

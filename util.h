@@ -184,4 +184,12 @@ int handle_term_signals(void);
  */
 int is_running(void);
 
+/**
+ * Acquire proper SynceE Do Not Use signal value basing on given arguments
+ *
+ * @param network_option	Type of the network
+ * @param extended_tlv		If QL for extended tlv
+ * @return			Do Not Use signal value
+ */
+uint8_t synce_get_dnu_value(int netwotk_option, int extended_tlv);
 #endif

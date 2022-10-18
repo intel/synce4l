@@ -35,6 +35,7 @@
 #include "ether.h"
 #include "print.h"
 #include "util.h"
+#include "synce_msg.h"
 
 #define NS_PER_SEC 1000000000LL
 #define NS_PER_HOUR (3600 * NS_PER_SEC)
@@ -243,3 +244,23 @@ int is_running(void)
 	return running;
 }
 
+uint8_t synce_get_dnu_value(int network_option, int extended_tlv)
+{
+	uint8_t ret = O1N_QL_DNU_ENHSSM;
+
+	if (extended_tlv) {
+		if (network_option == SYNCE_NETWORK_OPT_1) {
+			ret = O1N_QL_DNU_ENHSSM;
+		} else if (network_option == SYNCE_NETWORK_OPT_2) {
+			ret = O2N_QL_DUS_ENHSSM;
+		}
+	} else {
+		if (network_option == SYNCE_NETWORK_OPT_1) {
+			ret = O1N_QL_DNU_SSM;
+		} else if (network_option == SYNCE_NETWORK_OPT_2) {
+			ret = O2N_QL_DUS_SSM;
+		}
+	}
+
+	return ret;
+}
