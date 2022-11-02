@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 
 CC	= gcc
-CFLAGS	= -Wall $(EXTRA_CFLAGS) -pthread
+CFLAGS	= -Wall -D_GNU_SOURCE $(EXTRA_CFLAGS) -pthread
 LDLIBS	= -lm -lrt -pthread $(EXTRA_LDFLAGS)
 
 OBJS	= esmc_socket.o synce_clock.o synce_dev.o synce_dev_ctrl.o \
