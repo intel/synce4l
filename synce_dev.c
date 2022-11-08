@@ -87,6 +87,7 @@ static int init_ports(int *count, struct synce_dev *dev, struct config *cfg)
 				pr_err("failed to configure port %s on device %s",
 				       port_name, dev->name);
 				synce_port_destroy(port);
+				free(port);
 				continue;
 			}
 
@@ -94,6 +95,7 @@ static int init_ports(int *count, struct synce_dev *dev, struct config *cfg)
 				pr_err("failed to add port %s to device %s",
 				       port_name, dev->name);
 				synce_port_destroy(port);
+				free(port);
 				continue;
 			} else {
 				(*count)++;
