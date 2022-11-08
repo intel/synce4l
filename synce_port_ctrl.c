@@ -823,6 +823,9 @@ int synce_port_ctrl_destroy(struct synce_port_ctrl *pc)
 	}
 	pr_debug("%s on %s", __func__, pc->name);
 
+	if (!pc->transport)
+		return 0;
+
 	thread_stop_wait(&pc->tx.cd);
 	if (pc->tx.cd.pdu) {
 		synce_msg_delete(pc->tx.cd.pdu);
@@ -1210,6 +1213,7 @@ struct synce_port_ctrl *synce_port_ctrl_create(const char *name)
 		return NULL;
 	}
 
+	memset(p, 0, sizeof(*p));
 	memcpy(p->name, name, sizeof(p->name));
 
 	return p;
