@@ -11,8 +11,16 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
+VERSION := "$(shell git describe --abbrev=4 --dirty --always --tags)"
+ifndef VERSION
+  $(error VERSION is unset)
+endif
+ifeq ($(VERSION), "")
+  $(error VERSION is empty)
+endif
+
 CC	= gcc
-CFLAGS	= -Wall $(EXTRA_CFLAGS) -pthread
+CFLAGS	= -Wall $(EXTRA_CFLAGS) -pthread -DVERSION=$(VERSION)
 LDLIBS	= -lm -lrt -pthread $(EXTRA_LDFLAGS)
 
 OBJS	= esmc_socket.o synce_clock.o synce_dev.o synce_dev_ctrl.o \

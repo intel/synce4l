@@ -15,6 +15,7 @@
 #include "synce_clock.h"
 #include "config.h"
 #include "print.h"
+#include "util.h"
 
 static void usage(char *progname)
 {
@@ -40,9 +41,12 @@ static void synce4l_cleanup(struct config *cfg)
 		config_destroy(cfg);
 }
 
-static void version_show()
+static void version_show(void)
 {
-	// TODO: add version
+#ifndef VERSION
+	#error VERSION macro not defined, failing compilation.
+#endif
+	printf("synce4l version: %s\n", xstr(VERSION));
 }
 
 int unused()
@@ -89,7 +93,7 @@ int main(int argc, char *argv[])
 			config_set_int(cfg, "use_syslog", 0);
 			break;
 		case 'v':
-			version_show(stdout);
+			version_show();
 			synce4l_cleanup(cfg);
 			return 0;
 		case 'h':
