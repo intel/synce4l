@@ -7,6 +7,7 @@
  * @note SPDX-FileCopyrightText: Copyright 2022 Intel Corporation
  * @note SPDX-License-Identifier: GPL-2.0+
  */
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <limits.h>
 #include <pthread.h>
