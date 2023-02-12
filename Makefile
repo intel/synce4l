@@ -20,7 +20,7 @@ ifeq ($(VERSION), "")
 endif
 
 CC	= gcc
-CFLAGS	= -Wall $(EXTRA_CFLAGS) -pthread -DVERSION=$(VERSION)
+CFLAGS	= -Wall -Wextra -Werror $(EXTRA_CFLAGS) -pthread -DVERSION=$(VERSION)
 LDLIBS	= -lm -lrt -pthread $(EXTRA_LDFLAGS)
 
 OBJS	= esmc_socket.o synce_clock.o synce_dev.o synce_dev_ctrl.o \
