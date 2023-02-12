@@ -33,6 +33,8 @@
 #define xstr(s)	str(s)
 #define str(s)	#s
 
+#define UNUSED(var) (void)(var)
+
 #define PACKED __attribute__((packed))
 
 #define MAX_PRINT_BYTES 16

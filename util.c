@@ -215,6 +215,8 @@ int get_arg_val_d(int op, const char *optarg, double *val,
 
 static void handle_int_quit_term(int s)
 {
+	UNUSED(s);
+
 	running = 0;
 }
 
