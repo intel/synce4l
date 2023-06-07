@@ -186,7 +186,8 @@ static struct config_item *config_section_item(struct config *cfg,
 {
 	char buf[CONFIG_LABEL_SIZE + MAX_IFNAME_SIZE];
 
-	if (snprintf(buf, sizeof(buf), "%s.%s", section, name) >= sizeof(buf))
+	if ((unsigned long)snprintf(buf, sizeof(buf), "%s.%s", section, name) >=
+	    sizeof(buf))
 		return NULL;
 	return hash_lookup(cfg->htab, buf);
 }
@@ -630,8 +631,8 @@ struct config *config_create()
 	for (i = 0; i < end; i++) {
 		ci = &ci_tab[i];
 		ci->flags |= CFG_ITEM_STATIC;
-		if (snprintf(buf, sizeof(buf), "global.%s", ci->label) >=
-		    sizeof(buf)) {
+		if ((unsigned long)snprintf(buf, sizeof(buf), "global.%s",
+					    ci->label) >= sizeof(buf)) {
 			fprintf(stderr, "option %s too long\n", ci->label);
 			goto fail;
 		}
