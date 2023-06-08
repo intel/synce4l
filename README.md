@@ -29,6 +29,7 @@ Table showing priority of quality levels (QLs) in option 1 networks:
 | PRC           | 2         | 0x2 | 0xFF           |
 | SSU-A         | 3         | 0x4 | 0xFF           |
 | SSU-B         | 4         | 0x8 | 0xFF           |
+| EEC1          | 5         | 0xB | 0xFF           |
 
 Table showing priority of quality levels (QLs) in option 2 networks:
 | Quality Level | Priority* | SSM | Extended SSM** |
@@ -40,7 +41,8 @@ Table showing priority of quality levels (QLs) in option 2 networks:
 | ST2           | 4         | 0x7 | 0xFF           |
 | TNC           | 5         | 0x4 | 0xFF           |
 | ST3E          | 6         | 0xD | 0xFF           |
-| PROV          | 7         | 0xE | 0xFF           |
+| EEC2          | 7         | 0xA | 0xFF           |
+| PROV          | 8         | 0xE | 0xFF           |
 
 > *Remark:* *Lower number means higher priority
 
