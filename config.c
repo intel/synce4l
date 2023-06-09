@@ -703,7 +703,7 @@ int config_get_int(struct config *cfg, const char *section, const char *option)
 	case CFG_TYPE_ENUM:
 		break;
 	}
-	pr_debug("config item %s.%s is %d", section, option, ci->val.i);
+	pr_debug("config item %s.%s is %d (0x%x)", section, option, ci->val.i, ci->val.i);
 	return ci->val.i;
 }
 

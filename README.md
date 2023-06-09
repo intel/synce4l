@@ -139,8 +139,8 @@ SyncE device (until next device section).
 | Parameter               | Default | Valid values       | Description                                                                                                                                                     |
 | ----------------------- | ------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `input_mode`            | `line`  | `line`, `external` | Set to "line" to enable line input mode, set "external" for external input mode.                                                                                |
-| `external_input_QL`     | `0`     | `0-15`             | Quality Level (QL) for "external input" mode.                                                                                                                   |
-| `external_input_ext_QL` | `0`     | `0-255`            | Extended Quality Level for "external input" mode.                                                                                                               |
+| `external_input_QL`     | `0`     | `0x0-0xF`          | SSM - Quality Level (QL) for "external input" mode in hex.                                                                                                      |
+| `external_input_ext_QL` | `0`     | `0x0-0xFF`         | Extended SSM - Extended Quality Level for "external input" mode in hex.                                                                                         |
 | `extended_tlv`          | `0`     | `0`, `1`           | Set to 1 to enable extended QL.                                                                                                                                 |
 | `network_option`        | `1`     | `1`, `2`           | Network option according to T-REC-G.8264. All devices in SyncE domain should have the same option configured.                                                   |
 | `recover_time`          | `60`    | `10-720`           | Seconds indicating the minimum time to recover from the QL-failed state on the port.                                                                            |
@@ -157,14 +157,14 @@ Any other section not starting with `<` (e.g. [eth0]) is the port section.
 Multiple port sections are allowed. Each port participates in SyncE
 communication.
 
-| Parameter                   | Default | Valid values | Description                                                                                                                                                                    |
-| --------------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tx_heartbeat_msec`         | `1000`  | `100-3000`   | Interval between consecutive SyncE frame transmissions (1000ms is recommended).                                                                                                |
-| `rx_heartbeat_msec`         | `50`    | `10-500`     | Interval between consecutive SyncE socket polls (frame receive).                                                                                                               |
-| `recover_clock_enable_cmd`  | None    | string       | Shell command which enables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).          |
-| `recover_clock_disable_cmd` | None    | string       | Shell command which disables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).         |
-| `allowed_qls`               | None    | string       | List of integers containing allowed SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted          |
-| `allowed_ext_qls`           | None    | string       | List of integers containing allowed extended SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted |
+| Parameter                   | Default | Valid values | Description                                                                                                                                                                      |
+| --------------------------- | ------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tx_heartbeat_msec`         | `1000`  | `100-3000`   | Interval between consecutive SyncE frame transmissions (1000ms is recommended).                                                                                                  |
+| `rx_heartbeat_msec`         | `50`    | `10-500`     | Interval between consecutive SyncE socket polls (frame receive).                                                                                                                 |
+| `recover_clock_enable_cmd`  | None    | string       | Shell command which enables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).            |
+| `recover_clock_disable_cmd` | None    | string       | Shell command which disables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).           |
+| `allowed_qls`               | None    | string       | List of hex values containing allowed SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted.         |
+| `allowed_ext_qls`           | None    | string       | List of hex values containing allowed extended SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted.|
 
 > *Remark:* Please do not use backslashes in config file in 'string' fields - for example do not use it like this: `"/sys/kernel/debug/ice/0000\:5e\:00\.0/cgu_state"`
 
@@ -180,8 +180,8 @@ message_tag                [synce4l]
 [<synce1>]
 input_mode                 line
 network_option             1
-external_input_QL          11
-external_input_ext_QL      33
+external_input_QL          0x2
+external_input_ext_QL      0x20
 extended_tlv               1
 recover_time               20
 eec_get_state_cmd         cat /sys/class/net/eth0/device/cgu_state
@@ -196,8 +196,8 @@ tx_heartbeat_msec          1000
 rx_heartbeat_msec          500
 recover_clock_enable_cmd   echo 1 0 > /sys/class/net/eth0/device/phy/synce
 recover_clock_disable_cmd  echo 0 0 > /sys/class/net/eth0/device/phy/synce
-allowed_qls                3,4,7
-allowed_ext_qls            20,21
+allowed_qls                0x3,0x4,0x7
+allowed_ext_qls            0x20,0x21
 
 ```
 

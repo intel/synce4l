@@ -163,10 +163,10 @@ static int tx_rebuild_tlv(struct synce_port_tx *tx)
 
 	ret = synce_msg_attach_ql_tlv(cd->pdu, cd->ql);
 	if (ret) {
-		pr_err("attach QL=%u TLV failed on %s", cd->ql, cd->name);
+		pr_err("attach QL=0x%x TLV failed on %s", cd->ql, cd->name);
 		goto err;
 	} else {
-		pr_info("%s: attached new TLV, QL=%d on %s",
+		pr_info("%s: attached new TLV, QL=0x%x on %s",
 			__func__, cd->ql, cd->name);
 	}
 
@@ -177,7 +177,7 @@ static int tx_rebuild_tlv(struct synce_port_tx *tx)
 			pr_err("attach EXT_QL TLV failed on %s", cd->name);
 			goto err;
 		} else {
-			pr_info("%s: attached new extended TLV, EXT_QL=%d on %s",
+			pr_info("%s: attached new extended TLV, EXT_QL=0x%x on %s",
 				__func__, cd->ext_ql.enhancedSsmCode,
 				cd->name);
 		}
@@ -286,10 +286,10 @@ static int get_rx_qls(struct synce_port_rx *rx, uint8_t *ql,
 		return -EAGAIN;
 	}
 
-	pr_debug("QL=%d found on %s", *ql, cd->name);
+	pr_debug("QL=0x%x found on %s", *ql, cd->name);
 
 	if (!is_ql_allowed(&rx->allowed_qls, *ql)) {
-		pr_debug("Received not allowed QL: %i, discarding", *ql);
+		pr_debug("Received not allowed QL: 0x%x, discarding", *ql);
 		return -EBADMSG;
 	}
 
@@ -300,14 +300,13 @@ static int get_rx_qls(struct synce_port_rx *rx, uint8_t *ql,
 			/* only extended missing - not an error */
 			return 0;
 		}
-
-		pr_debug("extended QL=%d found on %s",
+		pr_debug("extended QL=0x%x found on %s",
 			 ext_ql->enhancedSsmCode, cd->name);
 
 		if (!is_ql_allowed((struct allowed_qls_head *)
 				   &rx->allowed_ext_qls,
 				   ext_ql->enhancedSsmCode)) {
-			pr_debug("Received not allowed ext_QL: %i, discarding",
+			pr_debug("Received not allowed ext_QL: 0x%x, discarding",
 				 ext_ql->enhancedSsmCode);
 			rx->ext_tlv_recvd = 0;
 			return -EBADMSG;
@@ -377,7 +376,7 @@ static int rx_act(struct synce_port_rx *rx)
 			}
 		} else {
 			update_ql(cd, rx->ext_tlv_recvd, ql, &ext_ql);
-			pr_debug("QL=%u received on %s", cd->ql, cd->name);
+			pr_debug("QL=0x%x received on %s", cd->ql, cd->name);
 		}
 	}
 
@@ -481,7 +480,7 @@ static void free_allowed_qls(struct allowed_qls_head *head)
 }
 
 #define QL_STR_MAX_LEN	256
-#define QL_STR_BASE	10
+#define QL_STR_BASE	16
 static int init_ql_str(struct allowed_qls_head *qls_stailq_head,
 		       const char *allowed_qls)
 {
