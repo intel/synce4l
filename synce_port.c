@@ -370,14 +370,6 @@ int synce_port_set_tx_ql_from_best_input(struct synce_port *port,
 		}
 		memcpy(&port->ext_ql_msg, &rx_ext_ql_msg,
 		       sizeof(port->ext_ql_msg));
-		ret = generate_clock_identity(&port->ext_ql_msg.clockIdentity,
-					      port->name);
-		if (ret) {
-			pr_err("failed to generate clock identity on %s",
-			       port->name);
-			return ret;
-		}
-
 		ret = ext_ql_msg_update_chain(port);
 		if (ret) {
 			pr_err("failed to update chain on %s",
