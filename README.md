@@ -137,8 +137,8 @@ SyncE device (until next device section).
 | Parameter               | Default | Valid values       | Description                                                                                                                                                     |
 | ----------------------- | ------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `input_mode`            | `line`  | `line`, `external` | Set to "line" to enable line input mode, set "external" for external input mode.                                                                                |
-| `external_input_QL`     | `0`     | `0-15`             | Quality Level (QL) for "external input" mode.                                                                                                                   |
-| `external_input_ext_QL` | `0`     | `0-255`            | Extended Quality Level for "external input" mode.                                                                                                               |
+| `external_input_QL`     | `0`     | `0-15`, `0x0-0xF`  | Quality Level (QL) for "external input" mode.                                                                                                                   |
+| `external_input_ext_QL` | `0`     | `0-255`,`0x0-0xFF` | Extended Quality Level for "external input" mode.                                                                                                               |
 | `extended_tlv`          | `0`     | `0`, `1`           | Set to 1 to enable extended QL.                                                                                                                                 |
 | `network_option`        | `1`     | `1`, `2`           | Network option according to T-REC-G.8264. All devices in SyncE domain should have the same option configured.                                                   |
 | `recover_time`          | `60`    | `10-720`           | Seconds indicating the minimum time to recover from the QL-failed state on the port.                                                                            |
@@ -178,8 +178,8 @@ message_tag                [synce4l]
 [<synce1>]
 input_mode                 line
 network_option             1
-external_input_QL          11
-external_input_ext_QL      33
+external_input_QL          0x2
+external_input_ext_QL      0x21
 extended_tlv               1
 recover_time               20
 eec_get_state_cmd         cat /sys/class/net/eth0/device/cgu_state
@@ -194,8 +194,8 @@ tx_heartbeat_msec          1000
 rx_heartbeat_msec          500
 recover_clock_enable_cmd   echo 1 0 > /sys/class/net/eth0/device/phy/synce
 recover_clock_disable_cmd  echo 0 0 > /sys/class/net/eth0/device/phy/synce
-allowed_qls                3,4,7
-allowed_ext_qls            20,21
+allowed_qls                0x2,0x4,0x8
+allowed_ext_qls            0x20,0x21
 
 ```
 

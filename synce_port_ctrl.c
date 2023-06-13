@@ -479,36 +479,37 @@ static void free_allowed_qls(struct allowed_qls_head *head)
 }
 
 #define QL_STR_MAX_LEN	256
-#define QL_STR_BASE	10
 static int init_ql_str(struct allowed_qls_head *qls_stailq_head,
 		       const char *allowed_qls)
 {
-	unsigned int allowed_qls_len;
-	char *endptr = NULL;
-	const char *ptr;
+	char buf[QL_STR_MAX_LEN], *ptr, *next;
 
 	if (allowed_qls == NULL) {
 		return 0;
 	}
 
-	allowed_qls_len = strnlen(allowed_qls, QL_STR_MAX_LEN);
-	if (allowed_qls_len == QL_STR_MAX_LEN) {
+	if ((unsigned long)snprintf(buf, sizeof (buf), "%s", allowed_qls) >=
+			sizeof (buf)) {
 		pr_err("QLs list string too long (max %i)", QL_STR_MAX_LEN);
 		return -E2BIG;
 	}
 
-	ptr = allowed_qls;
-	while (ptr <= allowed_qls + allowed_qls_len && *ptr) {
-		unsigned long value;
+	for (ptr = buf; ptr && *ptr; ptr = next) {
+		enum parser_result r;
+		unsigned int value;
 		struct ql *newql;
 
-		value = strtoul(ptr, &endptr, QL_STR_BASE);
-		if (endptr == ptr) {
+		next = strchr(ptr, ',');
+		if (next)
+			*next++ = '\0';
+
+		r = get_ranged_uint(ptr, &value, 0, UCHAR_MAX);
+		if (r == MALFORMED) {
 			pr_err("QL list item read failed - please verify");
 			free_allowed_qls(qls_stailq_head);
 			return -EINVAL;
 		}
-		if (value > UCHAR_MAX) {
+		if (r == OUT_OF_RANGE) {
 			pr_err("QL list item outside of range - please verify");
 			free_allowed_qls(qls_stailq_head);
 			return -EINVAL;
@@ -522,14 +523,6 @@ static int init_ql_str(struct allowed_qls_head *qls_stailq_head,
 
 		newql->value = value;
 		STAILQ_INSERT_HEAD(qls_stailq_head, newql, list);
-
-		ptr = endptr + 1;
-	}
-
-	if (endptr != allowed_qls + allowed_qls_len) {
-		pr_err("QL list malformed - not all read - please verify");
-		free_allowed_qls(qls_stailq_head);
-		return -EINVAL;
 	}
 
 	return 0;
