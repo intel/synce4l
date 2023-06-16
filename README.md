@@ -157,14 +157,14 @@ Any other section not starting with `<` (e.g. [eth0]) is the port section.
 Multiple port sections are allowed. Each port participates in SyncE
 communication.
 
-| Parameter                   | Default | Valid values | Description                                                                                                                                                                      |
-| --------------------------- | ------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tx_heartbeat_msec`         | `1000`  | `100-3000`   | Interval between consecutive SyncE frame transmissions (1000ms is recommended).                                                                                                  |
-| `rx_heartbeat_msec`         | `50`    | `10-500`     | Interval between consecutive SyncE socket polls (frame receive).                                                                                                                 |
-| `recover_clock_enable_cmd`  | None    | string       | Shell command which enables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).            |
-| `recover_clock_disable_cmd` | None    | string       | Shell command which disables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).           |
-| `allowed_qls`               | None    | string       | List of hex values containing allowed SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted.         |
-| `allowed_ext_qls`           | None    | string       | List of hex values containing allowed extended SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted.|
+| Parameter                   | Default | Valid values | Description                                                                                                                                                                       |
+| --------------------------- | ------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tx_heartbeat_msec`         | `1000`  | `100-3000`   | Interval between consecutive SyncE frame transmissions (1000ms is recommended).                                                                                                   |
+| `rx_heartbeat_msec`         | `50`    | `10-500`     | Interval between consecutive SyncE socket polls (frame receive).                                                                                                                  |
+| `recover_clock_enable_cmd`  | None    | string       | Shell command which enables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).             |
+| `recover_clock_disable_cmd` | None    | string       | Shell command which disables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).            |
+| `allowed_qls`               | None    | string       | List of hex values containing allowed SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted.          |
+| `allowed_ext_qls`           | None    | string       | List of hex values containing allowed extended SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted. |
 
 > *Remark:* Please do not use backslashes in config file in 'string' fields - for example do not use it like this: `"/sys/kernel/debug/ice/0000\:5e\:00\.0/cgu_state"`
 
