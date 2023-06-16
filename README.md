@@ -184,19 +184,19 @@ external_input_QL          0x2
 external_input_ext_QL      0x20
 extended_tlv               1
 recover_time               20
-eec_get_state_cmd         cat /sys/class/net/eth0/device/cgu_state
-eec_holdover_value        4
-eec_locked_ho_value       3
-eec_locked_value          2
-eec_freerun_value         1
-eec_invalid_value         0
+eec_get_state_cmd          cat /sys/class/net/eth0/device/dpll_0_state
+eec_holdover_value         4
+eec_locked_ho_value        3
+eec_locked_value           2
+eec_freerun_value          1
+eec_invalid_value          0
 
 [eth0]
 tx_heartbeat_msec          1000
 rx_heartbeat_msec          500
 recover_clock_enable_cmd   echo 1 0 > /sys/class/net/eth0/device/phy/synce
 recover_clock_disable_cmd  echo 0 0 > /sys/class/net/eth0/device/phy/synce
-allowed_qls                0x3,0x4,0x7
+allowed_qls                0x2,0x4,0x8
 allowed_ext_qls            0x20,0x21
 
 ```
