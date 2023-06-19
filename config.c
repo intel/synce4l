@@ -283,7 +283,7 @@ static enum parser_result parse_item(struct config *cfg,
 	enum parser_result r;
 	struct config_item *cgi, *dst;
 	struct config_enum *cte;
-	double df;
+	double df = 0.0;
 	int val;
 
 	r = parse_fault_interval(cfg, section, option, value);
