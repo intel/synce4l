@@ -11,12 +11,10 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-VERSION := "$(shell git describe --abbrev=4 --dirty --always --tags)"
-ifndef VERSION
-  $(error VERSION is unset)
-endif
-ifeq ($(VERSION), "")
-  $(error VERSION is empty)
+ifeq ("$(wildcard .git)", "")
+  VERSION = $(shell cat VERSION)
+else
+  VERSION = "$(shell git describe --abbrev=4 --dirty --always --tags)"
 endif
 
 CC	= gcc
