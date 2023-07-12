@@ -41,6 +41,7 @@ enum config_section {
 	GLOBAL_SECTION,
 	PORT_SECTION,
 	DEVICE_SECTION,
+	EXT_SECTION,
 	UNKNOWN_SECTION,
 };
 
@@ -65,11 +66,12 @@ typedef union {
 
 #define CONFIG_LABEL_SIZE 32
 
-#define CFG_ITEM_STATIC (1 << 0) /* statically allocated, not to be freed */
-#define CFG_ITEM_LOCKED (1 << 1) /* command line value, may not be changed */
-#define CFG_ITEM_PORT   (1 << 2) /* item may appear in port sections */
-#define CFG_ITEM_DYNSTR (1 << 4) /* string value dynamically allocated */
-#define CFG_ITEM_DEVICE (1 << 8) /* item may appear in device sections */
+#define CFG_ITEM_STATIC	(1 << 0)  /* statically allocated, not to be freed */
+#define CFG_ITEM_LOCKED	(1 << 1)  /* command line value, may not be changed */
+#define CFG_ITEM_PORT	(1 << 2)  /* item may appear in port sections */
+#define CFG_ITEM_DYNSTR	(1 << 4)  /* string value dynamically allocated */
+#define CFG_ITEM_DEVICE	(1 << 8)  /* item may appear in device sections */
+#define CFG_ITEM_EXT	(1 << 16) /* item may appear in external sections */
 
 struct config_item {
 	char label[CONFIG_LABEL_SIZE];
@@ -85,6 +87,7 @@ struct config_item {
 
 #define PORT_TO_FLAG(_port) _port == PORT_SECTION ? CFG_ITEM_PORT : \
 	_port == DEVICE_SECTION ? CFG_ITEM_DEVICE : \
+	_port == EXT_SECTION ? CFG_ITEM_EXT : \
 	CFG_ITEM_STATIC
 
 #define CONFIG_ITEM_DBL(_label, _port, _default, _min, _max) {	\
@@ -147,6 +150,12 @@ struct config_item {
 #define DEV_ITEM_STR(label, _default) \
 	CONFIG_ITEM_STRING(label, DEVICE_SECTION, _default)
 
+#define EXT_ITEM_INT(label, _default, min, max) \
+	CONFIG_ITEM_INT(label, EXT_SECTION, _default, min, max)
+
+#define EXT_ITEM_STR(label, _default) \
+	CONFIG_ITEM_STRING(label, EXT_SECTION, _default)
+
 struct config_item config_tab_synce[] = {
 	GLOB_ITEM_INT("logging_level", LOG_INFO, PRINT_LEVEL_MIN, PRINT_LEVEL_MAX),
 	GLOB_ITEM_STR("message_tag", NULL),
@@ -154,8 +163,6 @@ struct config_item config_tab_synce[] = {
 	GLOB_ITEM_STR("userDescription", ""),
 	GLOB_ITEM_INT("verbose", 0, 0, 1),
 	DEV_ITEM_STR("input_mode", "line"),
-	DEV_ITEM_INT("external_input_QL", 0, 0, 15),
-	DEV_ITEM_INT("external_input_ext_QL", 0, 0, 255),
 	DEV_ITEM_INT("extended_tlv", 0, 0, 1),
 	DEV_ITEM_INT("network_option", 1, 1, 2),
 	DEV_ITEM_INT("recover_time", 300, 10, 720),
@@ -171,6 +178,10 @@ struct config_item config_tab_synce[] = {
 	PORT_ITEM_STR("recover_clock_disable_cmd", NULL),
 	PORT_ITEM_INT("tx_heartbeat_msec", 1000, 100, 3000),
 	PORT_ITEM_INT("rx_heartbeat_msec", 50, 10, 500),
+	EXT_ITEM_INT("input_QL", 0, 0, 15),
+	EXT_ITEM_INT("input_ext_QL", 0, 0, 255),
+	EXT_ITEM_STR("external_enable_cmd", NULL),
+	EXT_ITEM_STR("external_disable_cmd", NULL),
 };
 
 static struct interface *__config_create_interface(const char *name, struct config *cfg,
@@ -261,11 +272,14 @@ static enum parser_result parse_section_line(char *s, enum config_section *secti
 		char c;
 		if (s[1] == '<')
 			*section = DEVICE_SECTION;
+		else if (s[1] == '{')
+			*section = EXT_SECTION;
 		else
 			*section = PORT_SECTION;
 		/* Replace brackets with white space. */
 		while (0 != (c = *s)) {
-			if (c == '[' || c == ']' || c == '<' || c == '>')
+			if (c == '[' || c == ']' || c == '<' || c == '>' ||
+			    c == '{' || c == '}')
 				*s = ' ';
 			s++;
 		}
@@ -324,6 +338,7 @@ static enum parser_result parse_item(struct config *cfg,
 
 	if (section) {
 		if (!(cgi->flags & CFG_ITEM_PORT) &&
+		    !(cgi->flags & CFG_ITEM_EXT) &&
 		    !(cgi->flags & CFG_ITEM_DEVICE)) {
 			return NOT_PARSED;
 		}
@@ -457,8 +472,8 @@ int config_read(const char *name, struct config *cfg)
 	FILE *fp;
 	char buf[1024], *line, *c;
 	const char *option, *value;
-	struct interface *current_port = NULL;
 	struct interface *current_device = NULL;
+	struct interface *current_clk_src = NULL;
 	int line_num;
 
 	fp = 0 == strncmp(name, "-", 2) ? stdin : fopen(name, "r");
@@ -487,25 +502,30 @@ int config_read(const char *name, struct config *cfg)
 			*c-- = '\0';
 
 		if (parse_section_line(line, &current_section) == PARSED_OK) {
-			if (current_section == PORT_SECTION) {
-				char port[IF_NAMESIZE + 1];
-				if (1 != sscanf(line, " %16s", port)) {
-					fprintf(stderr, "could not parse port name on line %d\n",
+			if (current_section == PORT_SECTION ||
+			    current_section == EXT_SECTION) {
+				char clk_src[IF_NAMESIZE + 1];
+
+				if (sscanf(line, " %16s", clk_src) != 1) {
+					fprintf(stderr, "could not parse clk_src name on line %d\n",
 							line_num);
 					goto parse_error;
 				}
-				current_port = config_create_interface(port, cfg);
-				if (!current_port)
+				current_clk_src = config_create_interface(clk_src, cfg);
+				if (!current_clk_src)
 					goto parse_error;
 				if (current_device) {
-					interface_se_set_parent_dev(current_port,
+					interface_se_set_parent_dev(current_clk_src,
 						interface_name(current_device));
+					if (current_section == EXT_SECTION)
+						interface_section_set_external_source(
+							current_clk_src);
 				} else {
 					goto parse_error;
 				}
 			} else if (current_section == DEVICE_SECTION) {
-				/* clear port on new device found in config */
-				current_port = NULL;
+				/* clear clk_src on new device found in config */
+				current_clk_src = NULL;
 				char device[IF_NAMESIZE + 1];
 				if (1 != sscanf(line, " %16s", device)) {
 					fprintf(stderr, "could not parse device name on line %d\n",
@@ -527,14 +547,14 @@ int config_read(const char *name, struct config *cfg)
 		if (parse_setting_line(line, &option, &value)) {
 			fprintf(stderr, "could not parse line %d in %s section\n",
 				line_num, current_section == GLOBAL_SECTION ?
-				"global" : interface_name(current_port ?
-							  current_port : current_device));
+				"global" : interface_name(current_clk_src ?
+							  current_clk_src : current_device));
 			goto parse_error;
 		}
 
 		parser_res = parse_item(cfg, 0, current_section == GLOBAL_SECTION ?
-					NULL : interface_name(current_port ?
-							      current_port : current_device),
+					NULL : interface_name(current_clk_src ?
+							      current_clk_src : current_device),
 					option, value);
 		switch (parser_res) {
 		case PARSED_OK:
@@ -543,8 +563,8 @@ int config_read(const char *name, struct config *cfg)
 			fprintf(stderr, "unknown option %s at line %d in %s section\n",
 				option, line_num,
 				current_section == GLOBAL_SECTION ? "global" :
-				interface_name(current_port ?
-					       current_port : current_device));
+				interface_name(current_clk_src ?
+					       current_clk_src : current_device));
 			goto parse_error;
 		case BAD_VALUE:
 			fprintf(stderr, "%s is a bad value for option %s at line %d\n",

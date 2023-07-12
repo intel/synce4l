@@ -9,7 +9,8 @@
 #include <stdlib.h>
 #include "interface.h"
 
-#define HAS_SYNCE_PARENT (1 << 0)
+#define HAS_SYNCE_PARENT	(1 << 0)
+#define IS_EXTERNAL_SOURCE	(1 << 1)
 
 struct interface {
 	STAILQ_ENTRY(interface) list;
@@ -55,4 +56,14 @@ const char *interface_se_get_parent_dev_label(struct interface *iface)
 bool interface_se_has_parent_dev(struct interface *iface)
 {
 	return !!(iface->synce_flags & HAS_SYNCE_PARENT);
+}
+
+void interface_section_set_external_source(struct interface *iface)
+{
+	iface->synce_flags |= IS_EXTERNAL_SOURCE;
+}
+
+bool interface_section_is_external_source(struct interface *iface)
+{
+	return !!(iface->synce_flags & IS_EXTERNAL_SOURCE);
 }

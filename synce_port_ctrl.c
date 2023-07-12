@@ -29,32 +29,6 @@
 #define TX_THREAD		1
 #define TASK_COMM_LEN		16
 
-#define ENHANCED_SSM_SHIFT		8
-#define QL_PRIORITY(r, e)		((e << ENHANCED_SSM_SHIFT) | r)
-
-#define O1N_PRIORITY_COUNT	6
-static const uint16_t O1N_priority[O1N_PRIORITY_COUNT] = {
-	QL_PRIORITY(O1N_QL_EPRTC_SSM, O1N_QL_EPRTC_ENHSSM),
-	QL_PRIORITY(O1N_QL_PRTC_SSM, O1N_QL_PRTC_ENHSSM),
-	QL_PRIORITY(O1N_QL_PRC_SSM, O1N_QL_PRC_ENHSSM),
-	QL_PRIORITY(O1N_QL_SSU_A_SSM, O1N_QL_SSU_A_ENHSSM),
-	QL_PRIORITY(O1N_QL_SSU_B_SSM, O1N_QL_SSU_B_ENHSSM),
-	QL_PRIORITY(O1N_QL_EEC1_SSM, O1N_QL_EEC1_ENHSSM)
-};
-
-#define O2N_PRIORITY_COUNT	9
-static const uint16_t O2N_priority[O2N_PRIORITY_COUNT] = {
-	QL_PRIORITY(O2N_QL_EPRTC_SSM, O2N_QL_EPRTC_ENHSSM),
-	QL_PRIORITY(O2N_QL_PRTC_SSM, O2N_QL_PRTC_ENHSSM),
-	QL_PRIORITY(O2N_QL_PRS_SSM, O2N_QL_PRS_ENHSSM),
-	QL_PRIORITY(O2N_QL_STU_SSM, O2N_QL_STU_ENHSSM),
-	QL_PRIORITY(O2N_QL_ST2_SSM, O2N_QL_ST2_ENHSSM),
-	QL_PRIORITY(O2N_QL_TNC_SSM, O2N_QL_TNC_ENHSSM),
-	QL_PRIORITY(O2N_QL_ST3E_SSM, O2N_QL_ST3E_ENHSSM),
-	QL_PRIORITY(O2N_QL_EEC2_SSM, O2N_QL_EEC2_ENHSSM),
-	QL_PRIORITY(O2N_QL_PROV_SSM, O2N_QL_PROV_ENHSSM)
-};
-
 struct ql {
 	STAILQ_ENTRY(ql) list;
 	uint8_t value;
@@ -738,7 +712,16 @@ err_attr:
 	return -ECHILD;
 }
 
-static uint16_t get_ql_priority(struct synce_port_ctrl *pc)
+uint16_t get_priority_params(struct synce_port_ctrl *pc,
+			     const uint16_t **priority_list)
+{
+	*priority_list = pc->priority_list;
+	if (!priority_list)
+		return 0;
+	return pc->priority_list_count;
+}
+
+uint16_t get_ql_priority(struct synce_port_ctrl *pc)
 {
 	if (pc->rx.cd.extended) {
 		return QL_PRIORITY(pc->rx.cd.ql,
@@ -749,7 +732,7 @@ static uint16_t get_ql_priority(struct synce_port_ctrl *pc)
 	}
 }
 
-static struct synce_port_ctrl *is_valid_source(struct synce_port_ctrl *pc)
+struct synce_port_ctrl *is_valid_source(struct synce_port_ctrl *pc)
 {
 	uint16_t ql_priority;
 	int i, err;
@@ -1058,61 +1041,6 @@ int synce_port_ctrl_enable_tx(struct synce_port_ctrl *pc)
 	unlock_mutex(&pc->tx.cd, __func__);
 
 	return 0;
-}
-
-struct synce_port_ctrl *
-synce_port_ctrl_compare_ql(struct synce_port_ctrl *left,
-			   struct synce_port_ctrl *right)
-{
-	uint16_t left_ql_priority, right_ql_priority;
-	struct synce_port_ctrl *best = NULL;
-	int i;
-
-	if (!left && !right) {
-		pr_err("%s both left and right are NULL", __func__);
-		goto out;
-	}
-
-	left = is_valid_source(left);
-	right = is_valid_source(right);
-
-	if (!left && !right) {
-		pr_err("both left and right are invalid");
-		goto out;
-	} else if (!left != !right) {
-		best = left ? left : right;
-		pr_debug("only one valid source %s QL=%u",
-			 best->name, best->rx.cd.ql);
-		goto out;
-	}
-
-	left_ql_priority = get_ql_priority(left);
-	right_ql_priority = get_ql_priority(right);
-
-	/* the left and right lists should be the same */
-	if (left->priority_list != right->priority_list ||
-	    left->priority_list_count != right->priority_list_count) {
-		pr_err("priority lists on compared ports are different");
-		return NULL;
-	}
-	/* we can use either left or right priority list */
-	for (i = 0; i < left->priority_list_count; i++) {
-		if (left->priority_list[i] == left_ql_priority) {
-			best = left;
-			goto out;
-		}
-		if (left->priority_list[i] == right_ql_priority) {
-			best = right;
-			goto out;
-		}
-	}
-
-	pr_debug("didn't found neither of QLs on priorities list");
-out:
-	if (!best) {
-		pr_debug("no valid source found");
-	}
-	return best;
 }
 
 int synce_port_ctrl_init(struct synce_port_ctrl *pc, struct config *cfg,

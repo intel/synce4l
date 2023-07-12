@@ -48,21 +48,14 @@ Table showing priority of quality levels (QLs) in option 2 networks:
 
 > *Remark:* **If extended SSM is not enabled, it's implicitly assumed as `0xFF`
 
-### External input mode
 
-If `synce4l` is configured to run in external input mode then EEC needs to have
-external 1PPS source attached (GPS or other generator).
-In this scenario `synce4l` always broadcasts clock quality level (QL) defined
-in configuration file. Additionally, for “external” mode incoming SyncE
-frames do not participate in best source selection algorithm for EEC.
 
-### Line input mode
-
-In line input mode incoming SyncE frames are processed and best clock source is
+Incoming SyncE frames are processed and best clock source is
 extracted from the link having the best quality level.
 `synce4l` configures such "best quality" port as a source to recover clock
 for EEC. The recovered QL is broadcasted to all other interfaces then.
-An external clock cannot be used in this mode.
+`synce4l` can use external 1PPS source attached (GPS or other generator).
+which will participate in best source selection algorithm for EEC.
 
 ---
 
@@ -138,9 +131,6 @@ SyncE device (until next device section).
 
 | Parameter               | Default | Valid values       | Description                                                                                                                                                     |
 | ----------------------- | ------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `input_mode`            | `line`  | `line`, `external` | Set to "line" to enable line input mode, set "external" for external input mode.                                                                                |
-| `external_input_QL`     | `0`     | `0-15`, `0x0-0xF`  | Quality Level (QL) for "external input" mode.                                                                                                                   |
-| `external_input_ext_QL` | `0`     | `0-255`,`0x0-0xFF` | Extended Quality Level for "external input" mode.                                                                                                               |
 | `extended_tlv`          | `0`     | `0`, `1`           | Set to 1 to enable extended QL.                                                                                                                                 |
 | `network_option`        | `1`     | `1`, `2`           | Network option according to T-REC-G.8264. All devices in SyncE domain should have the same option configured.                                                   |
 | `recover_time`          | `60`    | `10-720`           | Seconds indicating the minimum time to recover from the QL-failed state on the port.                                                                            |
@@ -168,6 +158,19 @@ communication.
 
 > *Remark:* Please do not use backslashes in config file in 'string' fields - for example do not use it like this: `"/sys/kernel/debug/ice/0000\:5e\:00\.0/cgu_state"`
 
+### External source section
+
+Any other section not starting with `{` (e.g. {SMA1}) is the external source section.
+Multiple external source sections are allowed. Each external source participates in
+best source selection algorithm for EEC
+
+| Parameter                   | Default | Valid values       | Description                                                                                                                                           |
+| --------------------------- | ------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input_QL`                  | `0`     | `0-15`, `0x0-0xF`  | Quality Level (QL) for "external input" mode.                                                                                                         |
+| `input_ext_QL`              | `0`     | `0-255`,`0x0-0xFF` | Extended Quality Level for "external input" mode.                                                                                                     |
+| `external_enable_cmd`       | None    | string             | Shell command which enables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device.  |
+| `external_disable_cmd`      | None    | string             | Shell command which disables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device. |
+
 ### Config example
 
 ```
@@ -178,10 +181,7 @@ verbose                    1
 message_tag                [synce4l]
 
 [<synce1>]
-input_mode                 line
 network_option             1
-external_input_QL          0x2
-external_input_ext_QL      0x20
 extended_tlv               1
 recover_time               20
 eec_get_state_cmd          cat /sys/class/net/eth0/device/dpll_0_state
@@ -198,6 +198,12 @@ recover_clock_enable_cmd   echo 1 0 > /sys/class/net/eth0/device/phy/synce
 recover_clock_disable_cmd  echo 0 0 > /sys/class/net/eth0/device/phy/synce
 allowed_qls                0x2,0x4,0x8
 allowed_ext_qls            0x20,0x21
+
+[{SMA1}]
+external_enable_cmd        echo 2 1 > /sys/class/net/enp1s0f0/device/ptp/ptp*/pins/SMA1
+external_disable_cmd       echo 0 1 > /sys/class/net/enp1s0f0/device/ptp/ptp*/pins/SMA1
+input_QL                   0x2
+input_ext_QL               0x20
 
 ```
 

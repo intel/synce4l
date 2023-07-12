@@ -14,7 +14,6 @@ struct synce_dev;
 struct config;
 
 struct synce_port {
-	LIST_ENTRY(synce_port) list;
 	int sync_mode;
 	int state;
 	struct synce_port_ctrl *pc;
@@ -45,19 +44,14 @@ struct synce_port *synce_port_create(const char *port_name);
  *				must hold properities of the configured port.
  * @param network_option	Network option that shall be used on the device
  * @param is_extended		If extended tlv support is on
- * @param rx_enabled		If rx of ESMC shall start
  * @param recovery_time		Seconds for period of recovering from QL-failed
  *				state.
- * @param forced_ql		Value of QL when QL is forced for the device,
- *				used in external input mode
  * @param forced_ext_ql		Value of ext QL when QL is forced for the
  *				device,	used in external input mode
  * @return			0 on success, failure otherwise
  */
 int synce_port_init(struct synce_port *port, struct config *cfg,
-		    int network_option, int is_extended,
-		    int rx_enabled, int recovery_time,
-		    uint8_t forced_ql, uint8_t forced_ext_ql);
+		    int network_option, int is_extended, int recovery_time);
 
 /**
  * Free resource under the synce_port instance. Caller shall free the passed
@@ -130,16 +124,6 @@ int synce_port_set_tx_ql_from_best_input(struct synce_port *port,
  * @return		1 if DNU is present, 0 if not, negative on failure
  */
 int synce_port_is_rx_dnu(struct synce_port *port);
-
-/**
- * Compare left with right port, which has higher incoming Quality Level.
- *
- * @param left		Port instance for comparison
- * @param righ		Port instance for comparison
- * @return		Pointer to best QL instance, NULL on failure or equal
- */
-struct synce_port *synce_port_compare_ql(struct synce_port *left,
-					 struct synce_port *right);
 
 /**
  * Get name of a port.
