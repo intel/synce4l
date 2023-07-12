@@ -84,23 +84,21 @@ static int ext_ql_msg_update_chain(struct synce_port *port)
 	return 0;
 }
 
-static int init_port_ql_val(struct synce_port *port, uint8_t forced_ql,
-			    int network_option)
+static int init_port_ql_val(struct synce_port *port, int network_option)
 {
 	if (!port) {
 		pr_err("%s port is NULL", __func__);
 		return -EFAULT;
 	}
 
-	port->ql_forced = forced_ql;
+	port->ql_forced = port->ql_forced;
 	port->ql_dnu = synce_get_dnu_value(network_option, false);
 	port->ql = port->ql_dnu;
 
 	return 0;
 }
 
-static int init_port_ext_ql(struct synce_port *port, uint8_t forced_ext_ql,
-			    int network_option)
+static int init_port_ext_ql(struct synce_port *port, int network_option)
 {
 	int ret;
 
@@ -128,7 +126,8 @@ static int init_port_ext_ql(struct synce_port *port, uint8_t forced_ext_ql,
 	memcpy(&port->ext_ql_msg_forced, &port->ext_ql_msg,
 	       sizeof(port->ext_ql_msg_forced));
 
-	port->ext_ql_msg_forced.enhancedSsmCode = forced_ext_ql;
+	port->ext_ql_msg_forced.enhancedSsmCode =
+		port->ext_ql_msg_dnu.enhancedSsmCode;
 
 	return ret;
 }
@@ -182,11 +181,10 @@ struct synce_port *synce_port_create(const char *port_name)
 }
 
 int synce_port_init(struct synce_port *port, struct config *cfg,
-		    int network_option, int is_extended,
-		    int rx_enabled, int recovery_time,
-		    uint8_t forced_ql, uint8_t forced_ext_ql)
+		    int network_option, int is_extended, int recovery_time)
 {
 	int ret;
+	int rx_enabled = true;
 
 	if (!port) {
 		pr_err("%s port is NULL", __func__);
@@ -197,26 +195,21 @@ int synce_port_init(struct synce_port *port, struct config *cfg,
 		goto err_port;
 	}
 
-	if (rx_enabled) {
-		port->recover_clock_enable_cmd =
-			config_get_string(cfg, port->name,
-					  "recover_clock_enable_cmd");
-		if (!port->recover_clock_enable_cmd) {
-			pr_err("recover_clock_enable_cmd config not provided for %s",
-			       port->name);
-			goto err_port;
-		}
-		port->recover_clock_disable_cmd =
-			config_get_string(cfg, port->name,
-					  "recover_clock_disable_cmd");
-		if (!port->recover_clock_disable_cmd) {
-			pr_err("recover_clock_disable_cmd config not provided for %s",
-			       port->name);
-			goto err_port;
-		}
-	} else {
-		port->recover_clock_enable_cmd = NULL;
-		port->recover_clock_disable_cmd = NULL;
+	port->recover_clock_enable_cmd =
+		config_get_string(cfg, port->name,
+				  "recover_clock_enable_cmd");
+	if (!port->recover_clock_enable_cmd) {
+		pr_err("recover_clock_enable_cmd config not provided for %s",
+		       port->name);
+		rx_enabled = false;
+	}
+	port->recover_clock_disable_cmd =
+		config_get_string(cfg, port->name,
+				  "recover_clock_disable_cmd");
+	if (!port->recover_clock_disable_cmd) {
+		pr_err("recover_clock_disable_cmd config not provided for %s",
+		       port->name);
+		rx_enabled = false;
 	}
 
 	port->pc = synce_port_ctrl_create(port->name);
@@ -225,14 +218,14 @@ int synce_port_init(struct synce_port *port, struct config *cfg,
 		goto err_port;
 	}
 
-	ret = init_port_ql_val(port, forced_ql, network_option);
+	ret = init_port_ql_val(port, network_option);
 	if (ret) {
 		pr_err("init port QL values failed on %s", port->name);
 		return ret;
 	}
 
 	if (is_extended) {
-		ret = init_port_ext_ql(port, forced_ext_ql, network_option);
+		ret = init_port_ext_ql(port, network_option);
 		if (ret) {
 			pr_err("init port ext QL values failed on %s",
 			       port->name);
@@ -391,26 +384,6 @@ int synce_port_is_rx_dnu(struct synce_port *port)
 	}
 
 	return synce_port_ctrl_rx_dnu(port->pc, port->ql_dnu);
-}
-
-struct synce_port *synce_port_compare_ql(struct synce_port *left,
-					 struct synce_port *right)
-{
-	struct synce_port_ctrl *best;
-
-	best = synce_port_ctrl_compare_ql(left ? left->pc : NULL,
-					  right ? right->pc : NULL);
-	if (!best) {
-		return NULL;
-	}
-
-	if (left && best == left->pc) {
-		return left;
-	} else if (right && best == right->pc) {
-		return right;
-	}
-
-	return NULL;
 }
 
 const char *synce_port_get_name(struct synce_port *port)

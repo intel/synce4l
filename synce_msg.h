@@ -67,12 +67,20 @@
 #define O2N_QL_EPRC_SSM			0x1
 #define O2N_QL_EPRC_ENHSSM		0x23
 
+#define ENHANCED_SSM_SHIFT		8
+#define QL_PRIORITY(r, e)		((e << ENHANCED_SSM_SHIFT) | r)
+
 /* Flags as defined in SyncE specification */
 #define MIXED_EEC_CHAIN_FLAG		(1 << 0)
 #define PARTIAL_EEC_CHAIN_FLAG		(1 << 1)
 
 /* 5 seconds is a period defined by standard for QL-failed state */
 #define QL_FAILED_PERIOD_SEC		5
+
+#define O1N_PRIORITY_COUNT	6
+extern const uint16_t O1N_priority[O1N_PRIORITY_COUNT];
+#define O2N_PRIORITY_COUNT	9
+extern const uint16_t O2N_priority[O2N_PRIORITY_COUNT];
 
 struct synce_msg_ext_ql {
 	uint8_t enhancedSsmCode;

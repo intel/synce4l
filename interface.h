@@ -66,4 +66,17 @@ const char *interface_se_get_parent_dev_label(struct interface *iface);
  */
 bool interface_se_has_parent_dev(struct interface *iface);
 
+/**
+ * Mark an interface section as an external clock source.
+ * @param iface      The interface of interest.
+ */
+void interface_section_set_external_source(struct interface *iface);
+
+/**
+ * Tests whether an interface section is external clock source.
+ * @param iface  The interface of interest.
+ * @return       True if the interface is external clock source
+ */
+bool interface_section_is_external_source(struct interface *iface);
+
 #endif
