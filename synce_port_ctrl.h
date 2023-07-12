@@ -120,19 +120,6 @@ int synce_port_ctrl_rebuild_tx(struct synce_port_ctrl *pc);
 int synce_port_ctrl_enable_tx(struct synce_port_ctrl *pc);
 
 /**
- * Check if sources given port sources are valid, than compare them,
- * choose the one with higher priority in terms of its received QL.
- *
- * @param left			Port instance for comparison
- * @param right			Port instance for comparison
- * @return			Pointer to a higher quality input port instance,
- *				NULL on failure or equal
- */
-struct synce_port_ctrl
-*synce_port_ctrl_compare_ql(struct synce_port_ctrl *left,
-			    struct synce_port_ctrl *right);
-
-/**
  * Initialize given instance with the given config.
  *
  * @param pc			Instance to be initialized
@@ -161,5 +148,33 @@ struct synce_port_ctrl *synce_port_ctrl_create(const char *name);
  * @param pc		Port control instance
  */
 void synce_port_ctrl_invalidate_rx_ql(struct synce_port_ctrl *pc);
+
+/**
+ * get combined QL priority of a given port.
+ *
+ * @param pc		Instance to be initialized
+ * @return		16 bit priority, QL combined with extended QL
+ */
+uint16_t get_ql_priority(struct synce_port_ctrl *pc);
+
+/**
+ * get priority parameters of a given port.
+ *
+ * @param pc			Questioned instance
+ * @param priority_list		Pointer to priority list to be fetched from pc
+ * @return			Number of priorities in list
+ */
+uint16_t get_priority_params(struct synce_port_ctrl *pc,
+			     const uint16_t **priority_list);
+
+/**
+ * Check whether given configured prorities of port_ctrl are valid.
+ *
+ * @param pc		Questioned instance
+ * @return		True - if configured priorities of pc are part of
+ * 			valid priority list of the configured network option.
+ * 			False - if not.
+ */
+struct synce_port_ctrl *is_valid_source(struct synce_port_ctrl *pc);
 
 #endif /* HAVE_SYNC_PORT_CTRL_H */

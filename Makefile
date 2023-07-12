@@ -23,7 +23,7 @@ LDLIBS	= -lm -lrt -pthread $(EXTRA_LDFLAGS)
 
 OBJS	= esmc_socket.o synce_clock.o synce_dev.o synce_dev_ctrl.o \
  synce_msg.o synce_port.o synce_port_ctrl.o synce_transport.o \
- config.o hash.o interface.o print.o util.o
+ synce_ext_src.o synce_clock_source.o config.o hash.o interface.o print.o util.o
 HEADERS = $(OBJS:.o=.h)
 BINARY 	= synce4l
 
