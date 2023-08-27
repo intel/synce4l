@@ -27,6 +27,7 @@ static void usage(char *progname)
 		"           (command line arguments takes precedence over config file)\n"
 		" -l [num]  set the logging level to 'num'\n"
 		"           (%d: least detailed, %d: most detailed)\n"
+		" -p [num]  state poll interval in milliseconds (default 20 ms)\n"
 		" -m        print messages to stdout\n"
 		" -q        do not print messages to the syslog\n"
 		" -v        print synce4l version and exit\n"
@@ -56,7 +57,7 @@ int unused()
 
 int main(int argc, char *argv[])
 {
-	int c, err = -EACCES, index, print_level;
+	int c, err = -EACCES, index, print_level, poll_interval_ms;
 	char *config = NULL, *progname;
 	struct synce_clock *clock;
 	struct option *opts;
@@ -71,10 +72,12 @@ int main(int argc, char *argv[])
 	}
 	opts = config_long_options(cfg);
 
+	poll_interval_ms = -1;
+
 	/* Process the command line arguments. */
 	progname = strrchr(argv[0], '/');
 	progname = progname ? 1+progname : argv[0];
-	while (EOF != (c = getopt_long(argc, argv, "f:l:mqvh",
+	while (EOF != (c = getopt_long(argc, argv, "f:l:p:mqvh",
 				       opts, &index))) {
 		switch (c) {
 		case 'f':
@@ -85,6 +88,12 @@ int main(int argc, char *argv[])
 					  PRINT_LEVEL_MIN, PRINT_LEVEL_MAX))
 				goto out;
 			config_set_int(cfg, "logging_level", print_level);
+			break;
+		case 'p':
+			if (get_arg_val_i(c, optarg, &poll_interval_ms,
+					1, INT_MAX))
+				goto out;
+			config_set_int(cfg, "poll_interval_ms", poll_interval_ms);
 			break;
 		case 'm':
 			config_set_int(cfg, "verbose", 1);

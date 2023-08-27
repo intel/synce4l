@@ -15,7 +15,7 @@
 #include "print.h"
 #include "config.h"
 
-#define SYNCE_CLOCK_DELAY_USEC		20000
+#define MSEC_TO_USEC(X)		(X * 1000)
 #define SYNCE_CLOCK_INIT_DELAY_USEC	200000
 #define SYNCE_CLOCK_INIT_N_TRIES	10
 
@@ -39,6 +39,7 @@ enum synce_clock_state {
 struct synce_clock {
 	int num_devices;
 	int state;
+	int poll_interval_ms;
 	LIST_HEAD(devices_head, synce_dev) devices;
 };
 
@@ -239,6 +240,8 @@ struct synce_clock *synce_clock_create(struct config *cfg)
 		goto destroy;
 	}
 
+	clk->poll_interval_ms = config_get_int(cfg, NULL, "poll_interval_ms");
+
 	return clk;
 
 destroy:
@@ -277,7 +280,7 @@ int synce_clock_poll(struct synce_clock *clk)
 			}
 		}
 	}
-	usleep(SYNCE_CLOCK_DELAY_USEC);
+	usleep(MSEC_TO_USEC(clk->poll_interval_ms));
 
 	return ret;
 }

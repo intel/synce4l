@@ -97,6 +97,7 @@ usage: synce4l [options]
            (config file takes precedence over command line arguments)
  -l [num]  set the logging level to 'num'
            (0: least detailed, 7: most detailed)
+ -p [num]  state poll interval in milliseconds (default 20 ms)
  -m        print messages to stdout
  -q        do not print messages to the syslog
  -v        print synce4l version and exit
@@ -117,14 +118,15 @@ usage: synce4l [options]
 
 ### Global section
 
-This section starts with `[global]` keyword. It sets the logging options.
+This section starts with `[global]` keyword and sets various global parameters.
 
-| Parameter       | Default | Valid values | Description                                    |
-| --------------- | ------- | ------------ | ---------------------------------------------- |
-| `logging_level` | `6`     | `0-7`        | Minimum log level required to appear in a log. |
-| `message_tag`   | None    | string       | Tag reported in a log.                         |
-| `use_syslog`    | `1`     | `0`, `1`     | Set to 1 if `syslog` should be used.           |
-| `verbose`       | `0`     | `0`, `1`     | Set to 1 to log extra information.             |
+| Parameter          | Default | Valid values | Description                                    |
+| ---------------    | ------- | ------------ | ---------------------------------------------- |
+| `logging_level`    | `6`     | `0-7`        | Minimum log level required to appear in a log. |
+| `poll_interval_ms` | `20`    | `1-60000`    | How often to check for updated state (ms).     |
+| `message_tag`      | None    | string       | Tag reported in a log.                         |
+| `use_syslog`       | `1`     | `0`, `1`     | Set to 1 if `syslog` should be used.           |
+| `verbose`          | `0`     | `0`, `1`     | Set to 1 to log extra information.             |
 
 ### Device section
 
