@@ -21,7 +21,6 @@
 #include "synce_transport.h"
 #include "synce_msg.h"
 
-#define MSEC_TO_USEC(X)		(X * 1000)
 #define THREAD_STOP_SLEEP_USEC	MSEC_TO_USEC(50)
 #define THREAD_START_SLEEP_USEC	MSEC_TO_USEC(20)
 #define SYNCE_THREAD_STACK_SIZE 0xffff

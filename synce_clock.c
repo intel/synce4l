@@ -15,7 +15,6 @@
 #include "print.h"
 #include "config.h"
 
-#define MSEC_TO_USEC(X)		(X * 1000)
 #define SYNCE_CLOCK_INIT_DELAY_USEC	200000
 #define SYNCE_CLOCK_INIT_N_TRIES	10
 

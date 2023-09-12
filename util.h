@@ -39,6 +39,7 @@
 
 #define MAX_PRINT_BYTES 16
 #define BIN_BUF_SIZE (MAX_PRINT_BYTES * 3 + 1)
+#define MSEC_TO_USEC(X)		(X * 1000)
 
 #define EUI48		6
 #define MAC_LEN		EUI48
