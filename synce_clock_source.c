@@ -127,7 +127,7 @@ struct synce_clock_source
 	right = is_valid_clock_source(right);
 
 	if (!left && !right) {
-		pr_err("both left and right are invalid");
+		pr_debug("both left and right are invalid");
 		goto out;
 	} else if (!left != !right) {
 		best = left ? left : right;
