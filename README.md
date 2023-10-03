@@ -61,6 +61,9 @@ which will participate in best source selection algorithm for EEC.
 
 ## 2\. Compilation
 
+With introduction of support for Linux dpll subsystem it is required to
+have linbl3-devel package (or equivalent) installed during compilation.
+
 Makefile rules are included in `Makefile` and compilation is done using
 the command:
 ```
@@ -140,6 +143,9 @@ SyncE device (until next device section).
 | `eec_locked_value`      | None    | string             | Value expected on stdout stream when EEC is in LOCKED state, after calling command defined in get_eec_state_cmd                                                 |
 | `eec_freerun_value`     | None    | string             | Value expected on stdout stream when EEC is in FREERUN state, after calling command defined in get_eec_state_cmd                                                |
 | `eec_invalid_value`     | None    | string             | Value expected on stdout stream when EEC is in INVALID state, after calling command defined in get_eec_state_cmd                                                |
+| `clock_id`              | None    | `0-MAX(u64)`       | Required when Linux dpll subsystem shall be used to control EEC, it refers to clock_id value of EEC type dpll in the system                                     |
+| `module_name`           | None    | string             | Required when Linux dpll subsystem shall be used to control EEC, it refers to name of kernel module that registered the dpll device in the system               |
+| `dnu_prio`              | 0xf     | `0-0xffff`         | Required for Autmatic mode dpll device when Linux dpll subsystem is used. Value of priority which shall be set for input pins, when the source is marked as DNU |
 
 ### Port section
 
@@ -170,9 +176,15 @@ best source selection algorithm for EEC
 | `input_ext_QL`              | `0`     | `0-255`,`0x0-0xFF` | Extended Quality Level for "external input" mode.                                                                                                     |
 | `external_enable_cmd`       | None    | string             | Shell command which enables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device.  |
 | `external_disable_cmd`      | None    | string             | Shell command which disables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device. |
+| `board_label`               | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                    |
+| `panel_label`               | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                    |
+| `package_label`             | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                    |
+
+> *Remark:* When dpll subsystem is used, a value of `board_label`, `panel_label` or `package_label` shall be provided, depending on a type of label that given input has registered in Linux dpll subsystem.
 
 ### Config example
 
+Command based config
 ```
 [global]
 logging_level              7
@@ -206,5 +218,35 @@ input_QL                   0x2
 input_ext_QL               0x20
 
 ```
+
+
+Linux dpll based config
+```
+[global]
+logging_level              7
+use_syslog                 0
+verbose                    1
+message_tag                [synce4l]
+
+[<synce1>]
+network_option             1
+extended_tlv               1
+recover_time               20
+clock_id                   0xaabbccffffccbbaa
+module_name                ice
+
+[eth0]
+tx_heartbeat_msec          1000
+rx_heartbeat_msec          500
+allowed_qls                0x2,0x4,0x8
+allowed_ext_qls            0x20,0x21
+
+[{SMA1}]
+board_label                SMA1
+input_QL                   0x2
+input_ext_QL               0x20
+
+```
+
 
 ---
