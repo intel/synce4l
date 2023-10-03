@@ -20,14 +20,10 @@
 #include "synce_port_ctrl.h"
 #include "synce_transport.h"
 #include "synce_msg.h"
+#include "synce_thread_common.h"
 
-#define MSEC_TO_USEC(X)		(X * 1000)
-#define THREAD_STOP_SLEEP_USEC	MSEC_TO_USEC(50)
-#define THREAD_START_SLEEP_USEC	MSEC_TO_USEC(20)
-#define SYNCE_THREAD_STACK_SIZE 0xffff
 #define RX_THREAD		0
 #define TX_THREAD		1
-#define TASK_COMM_LEN		16
 
 struct ql {
 	STAILQ_ENTRY(ql) list;
