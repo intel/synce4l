@@ -124,6 +124,22 @@ enum parser_result get_ranged_uint(const char *str_val, unsigned int *result,
 				   unsigned int min, unsigned int max);
 
 /**
+ * Get an unsigned 64 bit integer value from string with error checking and
+ * range specification.
+ *
+ * @param str_val    String which contains an unsigned integer value.
+ * @param result     Parsed value is stored in here.
+ * @param min        Lower limit. Return OUT_OF_RANGE if parsed value
+ *                   is less than min.
+ * @param max        Upper Limit. Return OUT_OF_RANGE if parsed value
+ *                   is bigger than max.
+ * @return           PARSED_OK on success, MALFORMED if str_val is malformed,
+ *                   OUT_OF_RANGE if str_val is out of range.
+ */
+enum parser_result get_ranged_u64(const char *str_val, uint64_t *result,
+				  uint64_t min, uint64_t max);
+
+/**
  * Get a double value from string with error checking and range
  * specification.
  *
