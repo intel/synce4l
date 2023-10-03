@@ -58,6 +58,23 @@ int sk_interface_index(int fd, const char *name)
         return ifreq.ifr_ifindex;
 }
 
+int sk_available(const char *name)
+{
+	struct ifreq ifreq;
+	int err, fd;
+
+	fd = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, PF_UNIX);
+	if (fd < 0)
+		return fd;
+	memset(&ifreq, 0, sizeof(ifreq));
+	strncpy(ifreq.ifr_name, name, sizeof(ifreq.ifr_name) - 1);
+	err = ioctl(fd, SIOCGIFINDEX, &ifreq);
+	close(fd);
+	if (err < 0)
+		return 0;
+	return 1;
+}
+
 #ifndef UNIT_TESTS
 int sk_interface_macaddr(const char *name, struct address *mac)
 {

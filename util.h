@@ -74,6 +74,8 @@ int str2mac(const char *s, unsigned char mac[MAC_LEN]);
 
 int sk_interface_index(int fd, const char *name);
 
+int sk_available(const char *name);
+
 int sk_interface_macaddr(const char *name, struct address *mac);
 
 int generate_clock_identity(struct ClockIdentity *ci, const char *name);
