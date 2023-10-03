@@ -159,6 +159,22 @@ enum parser_result get_ranged_uint(const char *str_val, unsigned int *result,
 	return PARSED_OK;
 }
 
+enum parser_result get_ranged_u64(const char *str_val, uint64_t *result,
+				  uint64_t min, uint64_t max)
+{
+	unsigned long parsed_val;
+	char *endptr = NULL;
+
+	errno = 0;
+	parsed_val = strtoull(str_val, &endptr, 0);
+	if (*endptr != '\0' || endptr == str_val)
+		return MALFORMED;
+	if (errno == ERANGE || parsed_val < min || parsed_val > max)
+		return OUT_OF_RANGE;
+	*result = parsed_val;
+	return PARSED_OK;
+}
+
 enum parser_result get_ranged_double(const char *str_val, double *result,
 				     double min, double max)
 {

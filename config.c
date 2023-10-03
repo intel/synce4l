@@ -47,6 +47,7 @@ enum config_section {
 
 enum config_type {
 	CFG_TYPE_INT,
+	CFG_TYPE_U64,
 	CFG_TYPE_DOUBLE,
 	CFG_TYPE_ENUM,
 	CFG_TYPE_STRING,
@@ -61,6 +62,7 @@ typedef union {
 	int i;
 	double d;
 	char *s;
+	uint64_t u64;
 } any_t;
 
 
@@ -113,6 +115,14 @@ struct config_item {
 	.min.i	= _min,					\
 	.max.i	= _max,					\
 }
+#define CONFIG_ITEM_U64(_label, _port, _default, _min, _max) {	\
+	.label	= _label,				\
+	.type	= CFG_TYPE_U64,			\
+	.flags	= PORT_TO_FLAG(_port),			\
+	.val.u64 = _default,				\
+	.min.u64 = _min,				\
+	.max.u64 = _max,				\
+}
 #define CONFIG_ITEM_STRING(_label, _port, _default) {	\
 	.label	= _label,				\
 	.type	= CFG_TYPE_STRING,			\
@@ -146,6 +156,9 @@ struct config_item {
 
 #define DEV_ITEM_INT(label, _default, min, max) \
 	CONFIG_ITEM_INT(label, DEVICE_SECTION, _default, min, max)
+
+#define DEV_ITEM_U64(label, _default, min, max) \
+	CONFIG_ITEM_U64(label, DEVICE_SECTION, _default, min, max)
 
 #define DEV_ITEM_STR(label, _default) \
 	CONFIG_ITEM_STRING(label, DEVICE_SECTION, _default)
@@ -294,9 +307,10 @@ static enum parser_result parse_item(struct config *cfg,
 				     const char *option,
 				     const char *value)
 {
-	enum parser_result r;
 	struct config_item *cgi, *dst;
 	struct config_enum *cte;
+	enum parser_result r;
+	uint64_t u64 = 0;
 	double df = 0.0;
 	int val;
 
@@ -315,6 +329,9 @@ static enum parser_result parse_item(struct config *cfg,
 	switch (cgi->type) {
 	case CFG_TYPE_INT:
 		r = get_ranged_int(value, &val, cgi->min.i, cgi->max.i);
+		break;
+	case CFG_TYPE_U64:
+		r = get_ranged_u64(value, &u64, cgi->min.u64, cgi->max.u64);
 		break;
 	case CFG_TYPE_DOUBLE:
 		r = get_ranged_double(value, &df, cgi->min.d, cgi->max.d);
@@ -362,6 +379,9 @@ static enum parser_result parse_item(struct config *cfg,
 	case CFG_TYPE_INT:
 	case CFG_TYPE_ENUM:
 		dst->val.i = val;
+		break;
+	case CFG_TYPE_U64:
+		dst->val.u64 = u64;
 		break;
 	case CFG_TYPE_DOUBLE:
 		dst->val.d = df;
@@ -717,6 +737,7 @@ int config_get_int(struct config *cfg, const char *section, const char *option)
 	switch (ci->type) {
 	case CFG_TYPE_DOUBLE:
 	case CFG_TYPE_STRING:
+	case CFG_TYPE_U64:
 		pr_err("bug: config option %s type mismatch!", option);
 		exit(-1);
 	case CFG_TYPE_INT:
@@ -725,6 +746,24 @@ int config_get_int(struct config *cfg, const char *section, const char *option)
 	}
 	pr_debug("config item %s.%s is %d (0x%x)", section, option, ci->val.i, ci->val.i);
 	return ci->val.i;
+}
+
+uint64_t
+config_get_u64(struct config *cfg, const char *section, const char *option)
+{
+	struct config_item *ci = config_find_item(cfg, section, option);
+
+	if (!ci) {
+		pr_err("bug: config option %s missing!", option);
+		exit(-1);
+	}
+	if (ci->type != CFG_TYPE_U64) {
+		pr_err("bug: config option %s type mismatch!", option);
+		exit(-1);
+	}
+	pr_debug("config item %s.%s is %lu (0x%lx)", section, option,
+		 ci->val.u64, ci->val.u64);
+	return ci->val.u64;
 }
 
 char *config_get_string(struct config *cfg, const char *section,
@@ -794,6 +833,7 @@ int config_set_section_int(struct config *cfg, const char *section,
 	switch (cgi->type) {
 	case CFG_TYPE_DOUBLE:
 	case CFG_TYPE_STRING:
+	case CFG_TYPE_U64:
 		pr_err("bug: config option %s type mismatch!", option);
 		return -1;
 	case CFG_TYPE_INT:
