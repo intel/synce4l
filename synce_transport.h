@@ -24,6 +24,17 @@ struct synce_pdu;
 struct synce_transport *synce_transport_create(const char *iface);
 
 /**
+ * Reinit a SyncE transport.
+ *
+ * This high level API to reinitialize SyncE transport, when it has failed i.e.
+ * due to driver reload.
+ *
+ * @param transport	Previously created transport.
+ * @return		Zero on success, non-zero if failure
+ */
+int synce_transport_reinit(struct synce_transport *transport);
+
+/**
  * Delete a SyncE transport.
  *
  * This high level API deletes SyncE transport and frees all memory allocations.

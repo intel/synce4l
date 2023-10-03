@@ -63,6 +63,19 @@ void synce_transport_delete(struct synce_transport *transport)
 	free(transport);
 }
 
+int synce_transport_reinit(struct synce_transport *transport)
+{
+	close(transport->raw_socket_fd);
+	transport->raw_socket_fd = open_esmc_socket(transport->iface);
+	if (transport->raw_socket_fd < 0)
+		return -EBUSY;
+	transport->iface_index =
+		sk_interface_index(transport->raw_socket_fd, transport->iface);
+	if (transport->iface_index < 0)
+		return -EBUSY;
+	return 0;
+}
+
 int synce_transport_send_pdu(struct synce_transport *transport,
 			     struct synce_pdu *pdu)
 {
