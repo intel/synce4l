@@ -755,7 +755,7 @@ struct synce_port_ctrl *is_valid_source(struct synce_port_ctrl *pc)
 		}
 	}
 	unlock_mutex(&pc->rx.cd, __func__);
-	pr_info("not valid source: %s", pc->name);
+	pr_debug("not valid source: %s", pc->name);
 
 	return NULL;
 }
