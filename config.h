@@ -25,6 +25,7 @@
 
 #include <getopt.h>
 #include <sys/queue.h>
+#include <stdint.h>
 
 struct config {
 	/* configured interfaces */
@@ -53,6 +54,9 @@ double config_get_double(struct config *cfg, const char *section,
 
 int config_get_int(struct config *cfg, const char *section,
 		   const char *option);
+
+uint64_t
+config_get_u64(struct config *cfg, const char *section, const char *option);
 
 char *config_get_string(struct config *cfg, const char *section,
 			const char *option);
