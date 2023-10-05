@@ -9,6 +9,8 @@
 
 #include <stdint.h>
 
+#define SYNCE_DEV_STEP_WAITING		1
+
 struct config;
 struct synce_dev;
 
