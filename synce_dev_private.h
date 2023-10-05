@@ -7,7 +7,7 @@
 
 #ifndef HAVE_SYNCE_DEV_PRIVATE_H
 #define HAVE_SYNCE_DEV_PRIVATE_H
-
+#include "dpll_mon.h"
 
 struct interface {
 	STAILQ_ENTRY(interface) list;
@@ -19,6 +19,8 @@ enum synce_dev_state {
 	DEVICE_INITED,
 	DEVICE_RUNNING,
 	DEVICE_FAILED,
+	DEVICE_DPLL_PAUSED,
+	DEVICE_PORT_PAUSED,
 };
 
 struct synce_dev {
@@ -38,6 +40,10 @@ struct synce_dev {
 	enum eec_state d_state;
 	enum eec_state last_d_state;
 	struct synce_dev_ctrl *dc;
+	struct dpll_mon *dpll_mon;
+	uint32_t dnu_prio;
+	int rebuild_prio;
+	struct config *cfg;
 };
 
 #endif

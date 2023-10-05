@@ -58,7 +58,8 @@ int synce_clock_source_add_source(struct synce_clock_source *clock_source,
 
 int synce_clock_source_init(struct synce_clock_source *clock_source,
 			    struct config *cfg, int network_option,
-			    int is_extended, int recovery_time)
+			    int is_extended, int recovery_time,
+			    struct dpll_mon *dpll_mon)
 {
 	if (!clock_source) {
 		pr_err("%s clock_source is NULL", __func__);
@@ -68,9 +69,9 @@ int synce_clock_source_init(struct synce_clock_source *clock_source,
 	if (clock_source->type == PORT)
 		return synce_port_init(clock_source->port, cfg,
 				       network_option, is_extended,
-				       recovery_time);
+				       recovery_time, dpll_mon);
 	return synce_ext_src_init(clock_source->ext_src, cfg,
-				  network_option, is_extended);
+				  network_option, is_extended, dpll_mon);
 }
 
 void synce_clock_source_destroy(struct synce_clock_source *clock_source)
@@ -188,4 +189,30 @@ get_clock_source_priority_params(struct synce_clock_source *clock_source,
 	*priority_count = get_ext_src_priority_params(
 			clock_source->ext_src, priority_list);
 	return get_ext_src_ql_priority(clock_source->ext_src);
+}
+
+int synce_clock_source_is_active(struct dpll_mon *dpll_mon,
+				 struct synce_clock_source *clk_src)
+{
+	if (!clk_src) {
+		pr_err("%s clock_source is NULL", __func__);
+		return 0;
+	}
+
+	if (clk_src->type == PORT)
+		return synce_port_is_active(dpll_mon, clk_src->port);
+	return synce_ext_src_is_active(dpll_mon, clk_src->ext_src);
+}
+
+int synce_clock_source_prio_set(struct dpll_mon *dpll_mon,
+				struct synce_clock_source *clk_src,
+				uint32_t prio)
+{
+	pr_debug("%s: set prio: %u on %s", __func__, prio,
+		 clk_src->type == PORT ? clk_src->port->name :
+		 clk_src->ext_src->name);
+	if (clk_src->type == PORT)
+		return synce_port_prio_set(dpll_mon, clk_src->port,
+					   prio);
+	return synce_ext_src_prio_set(dpll_mon, clk_src->ext_src, prio);
 }

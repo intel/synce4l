@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "util.h"
 #include "synce_msg.h"
+#include "dpll_mon.h"
 
 enum clk_type {
 	PORT = 0,
@@ -21,6 +22,7 @@ struct config;
 struct synce_clock_source {
 	LIST_ENTRY(synce_clock_source) list;
 	enum clk_type type;
+	int inited;
 	union {
 		struct synce_ext_src *ext_src;
 		struct synce_port *port;
@@ -54,12 +56,15 @@ int synce_clock_source_add_source(struct synce_clock_source *clock_source,
  *				must hold properities of the configured clock_source.
  * @param network_option	Network option that shall be used on the device
  * @param is_extended		If extended tlv support is on
- * @param recover_time		What time was set for recovery [s]
+ * @param recovery_time		What time was set for recovery [s]
+ * @param dpll_mon		valid pointer to dpll_mon, required when dpll
+ *				subsystem shall be used
  * @return			0 on success, failure otherwise
  */
 int synce_clock_source_init(struct synce_clock_source *clock_source,
 			    struct config *cfg, int network_option,
-			    int is_extended, int recovery_time);
+			    int is_extended, int recovery_time,
+			    struct dpll_mon *dpll_mon);
 
 /**
  * Get name of an clock source.
@@ -101,5 +106,30 @@ uint16_t
 get_clock_source_priority_params(struct synce_clock_source *clock_source,
 				 const uint16_t **priority_list,
 				 uint16_t *priority_count);
+
+/**
+ * check if clock source is an active dpll's input
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param clk_src	Questioned instance
+ * @return		0 - not active, 1 - active
+ */
+int synce_clock_source_is_active(struct dpll_mon *dpll_mon,
+				 struct synce_clock_source *clk_src);
+
+/**
+ * request to set priority of a clock source pin on a dpll, if pin is muxed
+ * and priority != dnu_prio, then set the priority on the parent and change pin
+ * state (with the parent) to CONNECTED as long as there is not yet used parent
+ * (configured with prio == dnu_prio)
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param clk_src	Configured instance
+ * @param prio		Priority value to be set
+ * @return		0 - success, error code - failure
+ */
+int synce_clock_source_prio_set(struct dpll_mon *dpll_mon,
+				struct synce_clock_source *clk_src,
+				uint32_t prio);
 
 #endif /* HAVE_SYNCE_CLOCK_SOURCE_H */

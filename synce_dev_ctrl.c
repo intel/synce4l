@@ -9,11 +9,14 @@
 #include <stdlib.h>
 #include "print.h"
 #include "synce_dev_ctrl.h"
+#include "dpll_mon.h"
 
 #define EEC_STATE_STR_RETURN_SIZE	0xff
+
 struct synce_dev_ctrl {
 	const char *eec_get_state_cmd;
 	struct eec_state_str ess;
+	struct dpll_mon *dpll_mon;
 };
 
 static int eec_str_state_to_enum(struct synce_dev_ctrl *dc, char *str_state,
@@ -46,7 +49,7 @@ static int eec_str_state_to_enum(struct synce_dev_ctrl *dc, char *str_state,
 }
 
 static int get_eec_state_from_cmd(struct synce_dev_ctrl *dc,
-				   enum eec_state *state)
+				  enum eec_state *state)
 {
 	char buf[EEC_STATE_STR_RETURN_SIZE] = {0}, *c;
 	FILE *fp;
@@ -80,6 +83,30 @@ out:
 	return ret ? EEC_UNKNOWN : eec_str_state_to_enum(dc, buf, state);
 }
 
+int synce_dev_ctrl_get_state_from_nl_dpll(struct synce_dev_ctrl *dc,
+					  enum eec_state *state)
+{
+	return dpll_mon_lock_state_get(dc->dpll_mon, state);
+}
+
+int synce_dev_ctrl_get_state_from_cmd(struct synce_dev_ctrl *dc,
+				      enum eec_state *state)
+{
+	int ret = -EINVAL;
+
+	if (!dc->eec_get_state_cmd) {
+		pr_err("%s: dc->eec_get_state_cmd is NULL", __func__);
+		return ret;
+	}
+
+	ret = get_eec_state_from_cmd(dc, state);
+	if (ret || *state < EEC_INVALID || *state > EEC_HOLDOVER) {
+		return ret;
+	}
+
+	return 0;
+}
+
 int synce_dev_ctrl_get_state(struct synce_dev_ctrl *dc,
 			     enum eec_state *state)
 {
@@ -95,17 +122,12 @@ int synce_dev_ctrl_get_state(struct synce_dev_ctrl *dc,
 		return ret;
 	}
 
-	if (!dc->eec_get_state_cmd) {
-		pr_err("%s: dc->eec_get_state_cmd is NULL", __func__);
-		return ret;
-	}
+	if (dc->dpll_mon)
+		ret = synce_dev_ctrl_get_state_from_nl_dpll(dc, state);
+	else
+		ret = synce_dev_ctrl_get_state_from_cmd(dc, state);
 
-	ret = get_eec_state_from_cmd(dc, state);
-	if (ret || *state < EEC_INVALID || *state > EEC_HOLDOVER) {
-		return ret;
-	}
-
-	return 0;
+	return ret;
 }
 
 struct synce_dev_ctrl *synce_dev_ctrl_create(void)
@@ -116,12 +138,18 @@ struct synce_dev_ctrl *synce_dev_ctrl_create(void)
 
 int synce_dev_ctrl_init(struct synce_dev_ctrl *dc, const char *dev_name,
 			const char *eec_get_state_cmd,
-			struct eec_state_str *ess)
+			struct eec_state_str *ess, struct dpll_mon *dpll_mon)
 {
 	if (!dc || !dev_name) {
 		return -ENODEV;
 	}
 
+	if (dpll_mon) {
+		dc->dpll_mon = dpll_mon;
+		pr_info("%s: using dpll subsystem", __func__);
+		return 0;
+	}
+	pr_info("%s: using provided commands", __func__);
 	if (!eec_get_state_cmd) {
 		pr_err("failure: eec_get_state_cmd is NULL on %s", dev_name);
 		return -ENXIO;

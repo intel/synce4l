@@ -17,6 +17,7 @@
 
 #define SYNCE_CLOCK_DELAY_USEC		20000
 #define SYNCE_CLOCK_INIT_DELAY_USEC	200000
+#define SYNCE_CLOCK_PAUSED_DELAY_USEC	1000000
 #define SYNCE_CLOCK_INIT_N_TRIES	10
 
 struct interface {
@@ -272,7 +273,10 @@ int synce_clock_poll(struct synce_clock *clk)
 	if (clk->state == SYNCE_CLK_RUNNING) {
 		LIST_FOREACH(dev, &clk->devices, list) {
 			ret = synce_dev_step(dev);
-			if (ret) {
+			if (ret == SYNCE_DEV_STEP_WAITING) {
+				usleep(SYNCE_CLOCK_PAUSED_DELAY_USEC);
+				ret = 0;
+			} else if (ret) {
 				pr_err("dev_step fail");
 			}
 		}
