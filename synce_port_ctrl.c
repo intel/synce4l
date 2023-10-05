@@ -187,16 +187,17 @@ static void *tx_thread(void *data)
 	pr_debug("tx thread started on port %s", cd->name);
 	*state = THREAD_STARTED;
 	while (*state == THREAD_STARTED) {
-		if (tx->rebuild_tlv) {
-			if (tx_rebuild_tlv(tx)) {
-				pr_err("tx rebuild failed");
-				goto unlock_out;
-			}
-		}
 
 		/* any errors are traced inside */
 		if (cd->enabled) {
-			synce_transport_send_pdu(cd->transport, cd->pdu);
+			if (tx->rebuild_tlv) {
+				if (tx_rebuild_tlv(tx)) {
+					pr_err("tx rebuild failed");
+					cd->enabled = 0;
+				}
+			}
+			if (synce_transport_send_pdu(cd->transport, cd->pdu))
+				synce_transport_reinit(cd->transport);
 		}
 		unlock_mutex(cd, __func__);
 		usleep(cd->heartbeat_usec);
@@ -571,6 +572,7 @@ static int rx_init(struct synce_port_rx *rx, int heartbeat_msec,
 	rx->ql_dnu_val = synce_get_dnu_value(network_option, false);
 	rx->ext_ql_dnu_val = synce_get_dnu_value(network_option, true);
 	rx->last_ql = rx->ql_dnu_val;
+	rx->ql_failed = 1;
 	memset(&rx->last_recv_ts, 0, sizeof(rx->last_recv_ts));
 	memset(&rx->first_valid_ts, 0, sizeof(rx->first_valid_ts));
 	rx->n_recv = 0;

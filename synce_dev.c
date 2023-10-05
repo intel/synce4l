@@ -21,6 +21,7 @@
 #include "synce_dev_ctrl.h"
 #include "synce_dev_private.h"
 #include "synce_msg.h"
+#include "nl_dpll.h"
 
 static int add_clock_source(struct synce_dev *dev,
 			    struct synce_clock_source *clock_source)
@@ -58,6 +59,22 @@ static void destroy_dev_ctrl(struct synce_dev *dev)
 	dev->dc = NULL;
 }
 
+static int init_clock_source(struct synce_clock_source *clock_source,
+			     struct synce_dev *dev, const char *port_name)
+{
+	int ret = synce_clock_source_init(clock_source, dev->cfg,
+					 dev->network_option, dev->extended_tlv,
+					 dev->recover_time, dev->dpll_mon);
+	if (ret) {
+		pr_debug("failed to init clock_source %s on device %s",
+			 port_name, dev->name);
+		return ret;
+	}
+	pr_debug("inited clock_source %s on device %s", port_name, dev->name);
+
+	return 0;
+}
+
 static int init_ports(int *count, int *clock_source_count,
 		      struct synce_dev *dev, struct config *cfg)
 {
@@ -68,12 +85,17 @@ static int init_ports(int *count, int *clock_source_count,
 
 	*clock_source_count = 0;
 	*count = 0;
+	dev->cfg = cfg;
 	STAILQ_FOREACH(iface, &cfg->interfaces, list) {
 		/* given device takes care only of its child ports */
 		if (interface_se_has_parent_dev(iface) &&
 		    (strncmp(interface_se_get_parent_dev_label(iface),
 			      dev->name, sizeof(dev->name)) == 0)) {
 			port_name = interface_name(iface);
+			if (sk_available(port_name) < 0) {
+				pr_err("not able to create RAW socket, try running as root");
+				return -EFAULT;
+			}
 			type = PORT;
 			if (interface_section_is_external_source(iface))
 				type = EXT_SRC;
@@ -92,32 +114,15 @@ static int init_ports(int *count, int *clock_source_count,
 				free(clock_source);
 				continue;
 			}
+			add_clock_source(dev, clock_source);
+			(*clock_source_count)++;
+			if (clock_source->type == PORT)
+				(*count)++;
+			pr_debug("clock_source %s added on device %s addr %p",
+				 port_name, dev->name, clock_source);
 
-			if (synce_clock_source_init(clock_source, cfg,
-						    dev->network_option,
-						    dev->extended_tlv,
-						    dev->recover_time)) {
-				pr_err("failed to configure clock_source %s on device %s",
-				       port_name, dev->name);
-				synce_clock_source_destroy(clock_source);
-				free(clock_source);
-				continue;
-			}
-
-			if (add_clock_source(dev, clock_source)) {
-				pr_err("failed to add clock_source %s to device %s",
-				       port_name, dev->name);
-				synce_clock_source_destroy(clock_source);
-				free(clock_source);
-				continue;
-			} else {
-				(*clock_source_count)++;
-				if (clock_source->type == PORT)
-					(*count)++;
-				pr_debug("clock_source %s added on device %s addr %p",
-					 port_name, dev->name, clock_source);
-			}
-			continue;
+			if (!init_clock_source(clock_source, dev, port_name))
+				clock_source->inited = 1;
 		}
 	}
 
@@ -138,16 +143,39 @@ static void update_dev_state(struct synce_dev *dev)
 	LIST_FOREACH(c, &dev->clock_sources, list) {
 		if (c->type == PORT) {
 			p = c->port;
-			if (synce_port_thread_running(p))
-				count++;
+			if (c->inited) {
+				if (synce_port_thread_running(p)) {
+					count++;
+				} else {
+					c->inited = 0;
+				}
+			} else {
+				if (sk_available(p->name) &&
+				    !init_clock_source(c, dev, p->name))
+					c->inited = 1;
+			}
 		}
 	}
 
-	if (dev->num_ports == count) {
-		dev->state = DEVICE_RUNNING;
+	if (dev->dpll_mon && !dpll_mon_dev_running(dev->dpll_mon)) {
+		if (dev->state != DEVICE_DPLL_PAUSED) {
+			pr_info("waiting for RUNNING on dpll mon for '%s'", dev->name);
+			dev->state = DEVICE_DPLL_PAUSED;
+		} else {
+			pr_debug("dpll for '%s' not running", dev->name);
+		}
+		return;
+	}
+
+	if (dev->num_ports != count) {
+		dev->state = DEVICE_PORT_PAUSED;
+		pr_debug("missing ports in the OS: %d ports running, %d expected on %s",
+			 count, dev->num_ports, dev->name);
+		return;
 	} else {
-		pr_warning("found %d ports running - %d configured on %s",
-			   count, dev->num_ports, dev->name);
+		if (dev->dpll_mon && dev->state != DEVICE_RUNNING)
+			dev->rebuild_prio = 1;
+		dev->state = DEVICE_RUNNING;
 	}
 }
 
@@ -189,21 +217,23 @@ static int update_ql_external_input(struct synce_dev *dev)
 	int ret = 0;
 
 	LIST_FOREACH(c, &dev->clock_sources, list) {
-		if (c->type == PORT) {
-			p = c->port;
-			if (dev->d_state == EEC_HOLDOVER) {
-				ret = port_set_dnu(p, dev->extended_tlv);
-			} else if (dev->d_state == EEC_LOCKED ||
-				   dev->d_state == EEC_LOCKED_HO_ACQ) {
-				ret = port_set_ql_external_input(p,
-							dev->extended_tlv);
-			}
-
-			if (ret) {
-				pr_err("update QL failed d_state %d, err:%d on %s",
-				       dev->d_state, ret, dev->name);
-				break;
-			}
+		if (c->type != PORT)
+			continue;
+		p = c->port;
+		if (dev->d_state == EEC_HOLDOVER) {
+			ret = port_set_dnu(p, dev->extended_tlv);
+			pr_info("act on EEC_HOLDOVER for %s",
+				synce_port_get_name(p));
+		} else if (dev->d_state == EEC_LOCKED ||
+			   dev->d_state == EEC_LOCKED_HO_ACQ) {
+			ret = port_set_ql_external_input(p, dev->extended_tlv);
+			pr_info("act on EEC_LOCKED/EEC_LOCKED_HO_ACQ for %s",
+				synce_port_get_name(p));
+		}
+		if (ret) {
+			pr_err("update QL failed d_state %d, err:%d on %s",
+			       dev->d_state, ret, dev->name);
+			break;
 		}
 	}
 
@@ -238,42 +268,48 @@ static int update_ql_line_input(struct synce_dev *dev)
 	best_p = dev->best_source ? dev->best_source->port : NULL;
 
 	LIST_FOREACH(c, &dev->clock_sources, list) {
-		if (c->type == PORT) {
-			p = c->port;
-			if (dev->d_state == EEC_HOLDOVER) {
-				pr_debug("act on EEC_HOLDOVER for %s",
-					 synce_port_get_name(p));
-				ret = port_set_dnu(p, dev->extended_tlv);
-				if (ret) {
-					pr_err("%s set DNU failed on %s",
-					       __func__, dev->name);
-					return ret;
-				}
-			} else if ((dev->d_state == EEC_LOCKED ||
-				    dev->d_state == EEC_LOCKED_HO_ACQ) &&
-				    best_p) {
-				pr_debug("act on EEC_LOCKED/EEC_LOCKED_HO_ACQ for %s",
-					 synce_port_get_name(p));
-				/* on best port send DNU, all the others
-				 * propagate what came from best source
-				 */
-				if (p != best_p) {
-					ret = port_set_ql_line_input(dev, p,
-								     best_p);
-				} else {
-					ret = port_set_dnu(p, dev->extended_tlv);
-				}
-
-				if (ret) {
-					pr_err("%s set failed on %s",
-					       __func__, dev->name);
-					return ret;
-				}
-			} else {
-				pr_debug("nothing to do for %s d_state %d, best_p %p",
-					 synce_port_get_name(p),
-					 dev->d_state, best_p);
+		if (c->type != PORT)
+			continue;
+		p = c->port;
+		if (dev->d_state == EEC_HOLDOVER) {
+			pr_info("act on EEC_HOLDOVER for %s",
+				synce_port_get_name(p));
+			ret = port_set_dnu(p, dev->extended_tlv);
+			if (ret) {
+				pr_err("%s set DNU failed on %s",
+				       __func__, dev->name);
+				return ret;
 			}
+		} else if ((dev->d_state == EEC_LOCKED ||
+			   dev->d_state == EEC_LOCKED_HO_ACQ) &&
+			   best_p) {
+			pr_info("act on EEC_LOCKED/EEC_LOCKED_HO_ACQ for %s",
+				synce_port_get_name(p));
+			/* on best port send DNU, all the others
+			 * propagate what came from best source
+			 */
+			if (p != best_p) {
+				ret = port_set_ql_line_input(dev, p,
+							     best_p);
+			} else {
+				ret = port_set_dnu(p, dev->extended_tlv);
+			}
+			if (ret) {
+				pr_err("%s set failed on %s",
+				       __func__, dev->name);
+				return ret;
+			}
+		} else if (!dev->d_state || (dev->dpll_mon && !best_p)) {
+			ret = port_set_dnu(p, dev->extended_tlv);
+			if (ret) {
+				pr_err("%s set DNU failed on %s",
+				       __func__, dev->name);
+				return ret;
+			}
+		} else {
+			pr_debug("nothing to do for %s d_state %d, best_p %p",
+				 synce_port_get_name(p),
+				 dev->d_state, best_p);
 		}
 	}
 
@@ -354,7 +390,10 @@ static int rx_ql_changed(struct synce_dev *dev)
 	LIST_FOREACH(c, &dev->clock_sources, list) {
 		if (c->type == PORT) {
 			p = c->port;
-			ret = synce_port_rx_ql_changed(p);
+			if (dev->dpll_mon)
+				ret = synce_port_rx_ql_require_prio_rebuild(p);
+			else
+				ret = synce_port_rx_ql_changed(p);
 			if (ret)
 				break;
 		}
@@ -529,10 +568,120 @@ static int dev_step_line_input(struct synce_dev *dev)
 	return ret;
 }
 
+int rebuild_inputs_prio(struct synce_dev *dev)
+{
+	struct synce_clock_source *tmp, *tmp_best, **arr, *best, *prev_tmp = NULL;
+	int i = 0, prio_count;
+
+	if (dpll_mon_pins_prio_dnu_set(dev->dpll_mon)) {
+		pr_err("failed to set DNU priorities on %s", dev->name);
+		return -EIO;
+	}
+	best = find_dev_best_clock_source(dev);
+	if (!best)
+		return 0;
+	arr = calloc(dev->num_clock_sources, sizeof(*arr));
+	arr[i++] = best;
+	LIST_FOREACH(tmp, &dev->clock_sources, list) {
+		if (tmp == best)
+			continue;
+		if (!prev_tmp) {
+			prev_tmp = tmp;
+			continue;
+		}
+		if (synce_clock_source_compare_ql(tmp, prev_tmp) == tmp) {
+			tmp_best = tmp;
+		} else {
+			tmp_best = prev_tmp;
+			prev_tmp = tmp;
+		}
+		if (tmp_best->type == PORT) {
+			if (synce_port_is_rx_dnu(tmp_best->port) ||
+			    synce_port_rx_ql_failed(tmp_best->port))
+				continue;
+			else
+				arr[i++] = tmp_best;
+		} else {
+			arr[i++] = tmp_best;
+		}
+	}
+	if (prev_tmp) {
+		if (prev_tmp->type != PORT)
+			arr[i++] = prev_tmp;
+		else if (!synce_port_is_rx_dnu(prev_tmp->port) &&
+			 !synce_port_rx_ql_failed(prev_tmp->port))
+			arr[i++] = prev_tmp;
+	}
+	prio_count = i;
+	pr_debug("considered valid clock sources num: %d on %s", i, dev->name);
+	for (i = 0; i < prio_count; i++)
+		synce_clock_source_prio_set(dev->dpll_mon, arr[i], i);
+	free(arr);
+	dev->rebuild_prio = 0;
+
+	return 0;
+}
+
+static int dev_step_dpll(struct synce_dev *dev)
+{
+	struct synce_clock_source *c, *active = NULL;
+	int ret = 0;
+
+	if (dev->rebuild_prio || rx_ql_changed(dev) ||
+	    (dev->best_source && dev->best_source->type == PORT &&
+	     (synce_port_is_rx_dnu(dev->best_source->port) ||
+	      synce_port_rx_ql_failed(dev->best_source->port))))
+		rebuild_inputs_prio(dev);
+
+	LIST_FOREACH(c, &dev->clock_sources, list) {
+		if (synce_clock_source_is_active(dev->dpll_mon, c)) {
+			if (c->type == PORT &&
+			    (synce_port_is_rx_dnu(c->port) ||
+			     synce_port_rx_ql_failed(c->port)))
+				break;
+			active = c;
+			break;
+		}
+	}
+
+	if (active == dev->best_source)
+		return ret;
+	if (!active && dev->best_source) {
+		pr_info("EEC_HOLDOVER on %s", dev->name);
+		dev->best_source = NULL;
+		dev->ext_src_is_best = 0;
+		dev_update_ql(dev);
+		return ret;
+	}
+	if (active->type != PORT) {
+		dev->ext_src_is_best = 1;
+		dev->best_source = active;
+		pr_info("EEC_LOCKED/EEC_LOCKED_HO_ACQ on %s of %s",
+			dev->best_source->ext_src->name, dev->name);
+		dev_update_ql(dev);
+	} else if (active->type == PORT) {
+		dev->ext_src_is_best = 0;
+		if ((synce_port_is_rx_dnu(active->port) ||
+		     synce_port_rx_ql_failed(active->port)) &&
+		    dev->best_source != NULL)
+			dev->best_source = NULL;
+		else
+			dev->best_source = active;
+		if (dev->best_source)
+			dev_update_ql(dev);
+		pr_info("EEC_LOCKED/EEC_LOCKED_HO_ACQ on %s of %s",
+			dev->best_source->port->name, dev->name);
+	}
+
+
+	return ret;
+}
+
 int synce_dev_init(struct synce_dev *dev, struct config *cfg)
 {
+	const char *eec_get_state_cmd, *module_name;
 	int count, clock_source_count, ret;
-	const char *eec_get_state_cmd;
+	uint64_t clock_id;
 	struct eec_state_str ess;
 
 	if (dev->state != DEVICE_CREATED) {
@@ -551,13 +700,32 @@ int synce_dev_init(struct synce_dev *dev, struct config *cfg)
 	ess.locked = config_get_string(cfg, dev->name, "eec_locked_value");
 	ess.freerun = config_get_string(cfg, dev->name, "eec_freerun_value");
 	ess.invalid = config_get_string(cfg, dev->name, "eec_invalid_value");
+	module_name = config_get_string(cfg, dev->name, "module_name");
+	clock_id = config_get_u64(cfg, dev->name, "clock_id");
+	dev->dnu_prio = config_get_int(cfg, dev->name, "dnu_prio");
 	dev->dc = synce_dev_ctrl_create();
 	if (!dev->dc) {
 		pr_err("device_ctrl create fail on %s", dev->name);
 		goto err;
 	}
 
-	ret = synce_dev_ctrl_init(dev->dc, dev->name, eec_get_state_cmd, &ess);
+	if (module_name && clock_id) {
+		dev->dpll_mon = dpll_mon_create(clock_id, module_name,
+						dev->name, dev->dnu_prio);
+		if (!dev->dpll_mon) {
+			pr_err("dpll_mon init failed on %s", dev->name);
+			goto err;
+		}
+		ret = dpll_mon_init(dev->dpll_mon);
+		if (ret) {
+			pr_err("dpll_mon init ret %d on %s", ret, dev->name);
+			goto err;
+		}
+	} else {
+		dev->dpll_mon = NULL; /* required for unit tests */
+	}
+	ret = synce_dev_ctrl_init(dev->dc, dev->name, eec_get_state_cmd,
+				  &ess, dev->dpll_mon);
 	if (ret) {
 		pr_err("synce_dev_ctrl init ret %d on %s", ret, dev->name);
 		goto err;
@@ -572,8 +740,8 @@ int synce_dev_init(struct synce_dev *dev, struct config *cfg)
 	dev->d_state = EEC_HOLDOVER;
 	update_ql(dev);
 
-	/* in case somebody manually set recovered clock before */
-	force_all_eecs_detach(dev);
+	if (!dev->dpll_mon)
+		force_all_eecs_detach(dev);
 
 	pr_info("inited num_clock_sources %d (%d ports) for %s",
 		clock_source_count, count, dev->name);
@@ -619,8 +787,17 @@ int synce_dev_step(struct synce_dev *dev)
 
 	update_dev_state(dev);
 	if (dev->state != DEVICE_RUNNING) {
+		if (dev->dpll_mon && dev->state == DEVICE_DPLL_PAUSED) {
+			pr_debug("waiting for dev %s to appear on dpll subsystem",
+				 dev->name);
+			return SYNCE_DEV_STEP_WAITING;
+		} else if (dev->state == DEVICE_PORT_PAUSED) {
+			pr_debug("waiting for dev %s ports to appear",
+				 dev->name);
+			return SYNCE_DEV_STEP_WAITING;
+		}
 		pr_err("dev %s is not running", dev->name);
-		return ret;
+		return 0;
 	}
 
 	ret = synce_dev_ctrl_get_state(dev->dc, &dev->d_state);
@@ -629,7 +806,11 @@ int synce_dev_step(struct synce_dev *dev)
 		return ret;
 	}
 
-	ret = dev_step_line_input(dev);
+	if (!dev->dpll_mon) {
+		ret = dev_step_line_input(dev);
+	} else {
+		ret = dev_step_dpll(dev);
+	}
 
 	return ret;
 }
@@ -653,9 +834,11 @@ void synce_dev_destroy(struct synce_dev *dev)
 		return;
 	}
 
-	if (dev->state != DEVICE_FAILED)
+	if (dev->state != DEVICE_FAILED && !dev->dpll_mon)
 		force_all_eecs_detach(dev);
 
+	if (dev->dpll_mon)
+		dpll_mon_destroy(dev->dpll_mon);
 	destroy_clock_sources(dev);
 	destroy_dev_ctrl(dev);
 }

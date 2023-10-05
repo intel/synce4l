@@ -17,16 +17,21 @@ else
   VERSION = "$(shell git describe --abbrev=4 --dirty --always --tags)"
 endif
 
-CC	= gcc
-CFLAGS	= -Wall -Wextra -Werror $(EXTRA_CFLAGS) -pthread -DVERSION=$(VERSION)
-LDLIBS	= -lm -lrt -pthread $(EXTRA_LDFLAGS)
+KERNEL_HEADERS = /usr/include
+ifeq ("$(wildcard $(KERNEL_HEADERS)/linux/dpll.h)", "")
+  INCLUDE_HEADERS = -Iheaders
+endif
 
-OBJS	= esmc_socket.o synce_clock.o synce_dev.o synce_dev_ctrl.o \
- synce_msg.o synce_port.o synce_port_ctrl.o synce_transport.o \
- synce_ext_src.o synce_clock_source.o config.o hash.o interface.o print.o util.o
+CC	= gcc
+CFLAGS	= -Wall -Wextra -Werror $(EXTRA_CFLAGS) -pthread -DVERSION=$(VERSION) \
+	-I/usr/include/libnl3 $(INCLUDE_HEADERS)
+LDLIBS	= -lm -lrt -pthread -lnl-genl-3 -lnl-3 $(EXTRA_LDFLAGS)
+OBJS	= esmc_socket.o dpll_mon.o nl_dpll.o synce_clock.o synce_dev.o \
+	  synce_dev_ctrl.o  synce_msg.o synce_port.o synce_port_ctrl.o \
+	  synce_transport.o  synce_ext_src.o synce_clock_source.o config.o \
+	  hash.o interface.o print.o util.o
 HEADERS = $(OBJS:.o=.h)
 BINARY 	= synce4l
-
 SRC	= $(OBJS:.o=.c)
 
 prefix	= /usr/local

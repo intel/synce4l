@@ -17,6 +17,7 @@
 #include "print.h"
 #include "config.h"
 #include "synce_msg.h"
+#include "nl_dpll.h"
 
 enum ext_src_state {
 	EXT_SRC_UNKNOWN = 0,
@@ -48,7 +49,8 @@ struct synce_ext_src *synce_ext_src_create(const char *ext_src_name)
 }
 
 int synce_ext_src_init(struct synce_ext_src *ext_src, struct config *cfg,
-		       int network_option, int is_extended)
+		       int network_option, int is_extended,
+		       struct dpll_mon *dpll_mon)
 {
 	if (!ext_src) {
 		pr_err("%s ext_src is NULL", __func__);
@@ -76,6 +78,23 @@ int synce_ext_src_init(struct synce_ext_src *ext_src, struct config *cfg,
 		goto err_ext_src;
 	}
 
+	ext_src->board_label = config_get_string(cfg, ext_src->name, "board_label");
+	ext_src->panel_label = config_get_string(cfg, ext_src->name, "panel_label");
+	ext_src->package_label = config_get_string(cfg, ext_src->name, "package_label");
+
+	if (dpll_mon) {
+		ext_src->pin = dpll_mon_add_pin(dpll_mon, ext_src->board_label,
+						ext_src->panel_label,
+						ext_src->package_label, 0);
+		if (!ext_src->pin) {
+			pr_err("could not init pin for ext_src: %s %s %s",
+			       ext_src->board_label, ext_src->panel_label,
+			       ext_src->package_label);
+			goto err_ext_src;
+		}
+		ext_src->state = EXT_SRC_INITED;
+		return 0;
+	}
 	ext_src->external_enable_cmd =
 		config_get_string(cfg, ext_src->name,
 				  "external_enable_cmd");
@@ -172,4 +191,16 @@ uint16_t get_ext_src_priority_params(struct synce_ext_src *ext_src,
 {
 	*priority_list = ext_src->priority_list;
 	return ext_src->priority_list_count;
+}
+
+int synce_ext_src_is_active(struct dpll_mon *dpll_mon,
+			    struct synce_ext_src *ext_src)
+{
+	return dpll_mon_pin_is_active(dpll_mon, ext_src->pin);
+}
+
+int synce_ext_src_prio_set(struct dpll_mon *dpll_mon,
+			   struct synce_ext_src *ext_src, uint32_t prio)
+{
+	return dpll_mon_pin_prio_set(dpll_mon, ext_src->pin, prio);
 }
