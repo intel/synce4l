@@ -9,9 +9,11 @@
 #include <stdint.h>
 #include "util.h"
 #include "synce_msg.h"
+#include "dpll_mon.h"
 
 struct synce_dev;
 struct config;
+struct dpll_mon_pin;
 
 struct synce_ext_src {
 	int state;
@@ -21,8 +23,13 @@ struct synce_ext_src {
 	char name[IF_NAMESIZE];
 	char *external_enable_cmd;
 	char *external_disable_cmd;
+	char *board_label;
+	char *panel_label;
+	char *package_label;
+	uint32_t pin_id;
 	const uint16_t *priority_list;
 	int priority_list_count;
+	struct dpll_mon_pin *pin;
 };
 
 /**
@@ -44,7 +51,8 @@ struct synce_ext_src *synce_ext_src_create(const char *ext_src_name);
  * @return			0 on success, failure otherwise
  */
 int synce_ext_src_init(struct synce_ext_src *ext_src, struct config *cfg,
-		       int network_option, int is_extended);
+		       int network_option, int is_extended,
+		       struct dpll_mon *dpll_mon);
 
 /**
  * Free resource under the synce_ext_src instance. Caller shall free the passed
@@ -95,5 +103,29 @@ uint16_t get_ext_src_ql_priority(struct synce_ext_src *ext_src);
  */
 uint16_t get_ext_src_priority_params(struct synce_ext_src *ext_src,
 				     const uint16_t **priority_list);
+
+/**
+ * check if ext source is an active dpll's input
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param ext_src	Questioned instance
+ * @return		0 - not active, 1 - active
+ */
+int synce_ext_src_is_active(struct dpll_mon *dpll_mon,
+			    struct synce_ext_src *ext_src);
+
+/**
+ * request to set priority of a external source associated pin on a dpll, if
+ * pin is muxed and priority != dnu_prio, then set the priority on the parent
+ * and change pin state (with the parent) to CONNECTED as long as there is not
+ * yet used parent (configured with prio == dnu_prio)
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param ext_src	Configured instance
+ * @param prio		Priority value to be set
+ * @return		0 - success, error code - failure
+ */
+int synce_ext_src_prio_set(struct dpll_mon *dpll_mon,
+			   struct synce_ext_src *ext_src, uint32_t prio);
 
 #endif /* HAVE_SYNCE_EXT_SRC_H */

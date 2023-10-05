@@ -181,10 +181,11 @@ struct synce_port *synce_port_create(const char *port_name)
 }
 
 int synce_port_init(struct synce_port *port, struct config *cfg,
-		    int network_option, int is_extended, int recovery_time)
+		    int network_option, int is_extended, int recovery_time,
+		    struct dpll_mon *dpll_mon)
 {
-	int ret;
 	int rx_enabled = true;
+	int ret;
 
 	if (!port) {
 		pr_err("%s port is NULL", __func__);
@@ -195,21 +196,29 @@ int synce_port_init(struct synce_port *port, struct config *cfg,
 		goto err_port;
 	}
 
-	port->recover_clock_enable_cmd =
-		config_get_string(cfg, port->name,
-				  "recover_clock_enable_cmd");
-	if (!port->recover_clock_enable_cmd) {
-		pr_err("recover_clock_enable_cmd config not provided for %s",
-		       port->name);
-		rx_enabled = false;
-	}
-	port->recover_clock_disable_cmd =
-		config_get_string(cfg, port->name,
-				  "recover_clock_disable_cmd");
-	if (!port->recover_clock_disable_cmd) {
-		pr_err("recover_clock_disable_cmd config not provided for %s",
-		       port->name);
-		rx_enabled = false;
+	if (dpll_mon && !port->pin) {
+		port->pin = dpll_mon_add_port_pin(dpll_mon, port->name);
+		if (!port->pin) {
+			pr_err("could not init pin for port %s", port->name);
+			goto err_port;
+		}
+	} else {
+		port->recover_clock_enable_cmd =
+			config_get_string(cfg, port->name,
+					  "recover_clock_enable_cmd");
+		if (!port->recover_clock_enable_cmd) {
+			pr_err("recover_clock_enable_cmd config not provided for %s",
+			       port->name);
+			rx_enabled = false;
+		}
+		port->recover_clock_disable_cmd =
+			config_get_string(cfg, port->name,
+					  "recover_clock_disable_cmd");
+		if (!port->recover_clock_disable_cmd) {
+			pr_err("recover_clock_disable_cmd config not provided for %s",
+			       port->name);
+			rx_enabled = false;
+		}
 	}
 
 	port->pc = synce_port_ctrl_create(port->name);
@@ -254,9 +263,8 @@ int synce_port_init(struct synce_port *port, struct config *cfg,
 
 	port->state = PORT_INITED;
 
-	return ret;
+	return 0;
 err_port:
-	port->state = PORT_FAILED;
 	return -ENODEV;
 }
 
@@ -303,6 +311,25 @@ int synce_port_rx_ql_changed(struct synce_port *port)
 	}
 
 	return synce_port_ctrl_rx_ql_changed(port->pc);
+}
+
+int synce_port_rx_ql_require_prio_rebuild(struct synce_port *port)
+{
+	int ql_changed, ql_failed_new;
+
+	if (!port) {
+		pr_err("%s port is NULL", __func__);
+		return -EINVAL;
+	}
+
+	ql_changed = synce_port_ctrl_rx_ql_changed(port->pc);
+	ql_failed_new = synce_port_ctrl_rx_ql_failed(port->pc);
+	if (port->ql_failed != ql_failed_new) {
+		port->ql_failed = ql_failed_new;
+		ql_changed = 1;
+	}
+
+	return ql_changed;
 }
 
 int synce_port_set_tx_ql_dnu(struct synce_port *port, int extended)
@@ -435,4 +462,15 @@ int synce_port_disable_recover_clock(struct synce_port *port)
 void synce_port_invalidate_rx_ql(struct synce_port *port)
 {
 	synce_port_ctrl_invalidate_rx_ql(port->pc);
+}
+
+int synce_port_is_active(struct dpll_mon *dpll_mon, struct synce_port *port)
+{
+	return dpll_mon_pin_is_active(dpll_mon, port->pin);
+}
+
+int synce_port_prio_set(struct dpll_mon *dpll_mon, struct synce_port *port,
+			uint32_t prio)
+{
+	return dpll_mon_pin_prio_set(dpll_mon, port->pin, prio);
 }
