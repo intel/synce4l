@@ -7,6 +7,8 @@
 #ifndef HAVE_SYNCE_DEV_CTRL_H
 #define HAVE_SYNCE_DEV_CTRL_H
 
+struct dpll_mon;
+
 /* possible EEC states */
 enum eec_state {
 	EEC_UNKNOWN = -1,
@@ -47,12 +49,14 @@ int synce_dev_ctrl_get_state(struct synce_dev_ctrl *dc,
  * @param dev_name		Name of device
  * @param eec_get_state_cmd	A command to obtain current eec state
  * @param ess			Pointer to a struct holding valid eec state
-				strings
+ *				strings
+ * @dpll_mon			Pointer do dpll_mon class
  * @return			Zero on success, non-zero if failure
  */
 int synce_dev_ctrl_init(struct synce_dev_ctrl *dc, const char *dev_name,
 			const char *eec_get_state_cmd,
-			struct eec_state_str *ess);
+			struct eec_state_str *ess,
+			struct dpll_mon *dpll_mon);
 
 /**
  * Allocate memory for a single EEC device controller instance.
