@@ -28,7 +28,7 @@ CFLAGS	= -Wall -Wextra -Werror $(EXTRA_CFLAGS) -pthread -DVERSION=$(VERSION) \
 LDLIBS	= -lm -lrt -pthread -lnl-genl-3 -lnl-3 $(EXTRA_LDFLAGS)
 OBJS	= esmc_socket.o dpll_mon.o nl_dpll.o synce_clock.o synce_dev.o \
 	  synce_dev_ctrl.o  synce_msg.o synce_port.o synce_port_ctrl.o \
-	  synce_transport.o  synce_ext_src.o synce_clock_source.o config.o \
+	  synce_manager.o synce_transport.o  synce_ext_src.o synce_clock_source.o config.o \
 	  hash.o interface.o print.o util.o
 HEADERS = $(OBJS:.o=.h)
 BINARY 	= synce4l

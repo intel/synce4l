@@ -5,6 +5,7 @@
 3. Installation
 4. Usage
 5. Config
+6. External API
 
 ---
 
@@ -115,12 +116,13 @@ usage: synce4l [options]
 
 This section starts with `[global]` keyword. It sets the logging options.
 
-| Parameter       | Default | Valid values | Description                                    |
-| --------------- | ------- | ------------ | ---------------------------------------------- |
-| `logging_level` | `6`     | `0-7`        | Minimum log level required to appear in a log. |
-| `message_tag`   | None    | string       | Tag reported in a log.                         |
-| `use_syslog`    | `1`     | `0`, `1`     | Set to 1 if `syslog` should be used.           |
-| `verbose`       | `0`     | `0`, `1`     | Set to 1 to log extra information.             |
+| Parameter         | Default               | Valid values | Description                                                       |
+| ----------------- | --------------------- | ------------ | ----------------------------------------------------------------- |
+| `logging_level`   | `6`                   | `0-7`        | Minimum log level required to appear in a log.                    |
+| `message_tag`     | None                  | string       | Tag reported in a log.                                            |
+| `smc_socket_path` | `/tmp/synce4l_socket` | string       | Full path to socket file for external application communication . |
+| `use_syslog`      | `1`                   | `0`, `1`     | Set to 1 if `syslog` should be used.                              |
+| `verbose`         | `0`                   | `0`, `1`     | Set to 1 to log extra information.                                |
 
 ### Device section
 
@@ -191,6 +193,7 @@ logging_level              7
 use_syslog                 0
 verbose                    1
 message_tag                [synce4l]
+smc_socket_path            /tmp/synce4l_socket
 
 [<synce1>]
 network_option             1
@@ -227,6 +230,7 @@ logging_level              7
 use_syslog                 0
 verbose                    1
 message_tag                [synce4l]
+smc_socket_path            /tmp/synce4l_socket
 
 [<synce1>]
 network_option             1
@@ -248,5 +252,65 @@ input_ext_QL               0x20
 
 ```
 
+---
+
+## 6\. External API
+
+The Synce4l API facilitates communication with the Synce4l running application using an AF_UNIX socket.
+Messages are exchanged as a list of TLV messages (Type-Length-Value) over the socket.
+The TLV structure is defined in `synce_external_api.h` as the following:
+
+## TLV Structure
+
+### Enum: synce_manager_type
+
+Defines different message types for the Synce Manager.
+
+- `MSG_DEV_NAME`   (1): Device name.
+- `MSG_SRC_NAME`   (2): External clock source name.
+- `MSG_ERR_MSG`    (3): Error messgae returned from synce4l.
+- `MSG_GET_QL`     (4): Get QL of devide.
+- `MSG_GET_EXT_QL` (5): Get extended QL of device.
+- `MSG_SET_QL`     (6): Set QL of external clock source.
+- `MSG_SET_EXT_QL` (7): Set extended QL of external clock source.
+- `MSG_END_MARKER` (8): End marker.
+
+### Struct: synce_manager_tlv
+
+Represents a TLV (Type-Length-Value) message.
+
+- `type` (uint16_t): Enum value from `synce_manager_type`.
+- `length` (uint16_t): Length of the value field in bytes.
+- `value` (void*): Data of the given length.
+
+## Communication
+
+Communication is achieved by packing the `synce_manager_tlv` structure and sending it as a byte stream to the AF_UNIX socket.
+Last TLV of any stream shall use the type `MSG_END_MARKER`.
+Returned byte stream from synce4l will use same TLV format, and will end by TLV with `MSG_END_MARKER` type.
+
+### Command and response example
+
+Below is command example for getting the QL of device `synce1`.
+Command is constructed from 3 TLVs:
+1. Type `MSG_DEV_NAME` with length `6` and value `synce1`
+2. Type `MSG_GET_QL` with length `0` and null value
+3. Type `MSG_END_MARKER` with length `0` and null value
+
+| TYPE  | LEN   | VALUE             || TYPE  | LEN   || TYPE  | LEN   |
+|---------------------------------------------------------------------|
+| DEV   | 6     | s  y  n  c  e  1  || GET   | 0     || END   | 0     |
+| 01 00 | 06 00 | 73 79 6E 63 65 31 || 04 00 | 00 00 || 08 00 | 00 00 |
+
+Example response from synce4l. Device `synce1` has QL = 2
+Response is constructed from 3 TLVs:
+1. Type `MSG_DEV_NAME` with length `6` and value `synce1`
+2. Type `MSG_GET_QL` with length `1` and value `2`
+3. Type `MSG_END_MARKER` with length `0` and null value
+
+| TYPE  | LEN   | VALUE             || TYPE  | LEN   | VALUE || TYPE  | LEN   |
+|-----------------------------------------------------------------------------|
+| DEV   | 6     | s  y  n  c  e  1  || GET   | 1     | 2     || END   | 0     |
+| 01 00 | 06 00 | 73 79 6E 63 65 31 || 04 00 | 01 00 | 02    || 08 00 | 00    |
 
 ---

@@ -7,10 +7,12 @@
 #ifndef HAVE_SYNCE_CLOCK_H
 #define HAVE_SYNCE_CLOCK_H
 
+#include <stdint.h>
 #include "config.h"
 
 /* Opaque type */
 struct synce_clock;
+struct synce_dev;
 
 /**
  * Create a SyncE clock instance.
@@ -36,4 +38,22 @@ void synce_clock_destroy(struct synce_clock *clk);
  */
 int synce_clock_poll(struct synce_clock *clk);
 
+/**
+ * return device instance from clock.
+ *
+ * @param clk		Questioned instance
+ * @param dev_name	dev_name to search
+ * @param dev		on return, return pointer to dev instance
+ * @return		0 if found or -1 if not found
+ */
+int synce_clock_get_dev(struct synce_clock *clk, char *dev_name,
+			struct synce_dev **dev);
+
+/**
+ * return socket path of clock.
+ *
+ * @param clk		Questioned instance
+ * @return		socket_path name
+ */
+char *synce_clock_get_socket_path(struct synce_clock *clk);
 #endif

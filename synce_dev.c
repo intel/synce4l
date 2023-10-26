@@ -563,6 +563,10 @@ static int dev_step_line_input(struct synce_dev *dev)
 			dev->best_source = NULL;
 			choose_best_source(dev);
 		}
+	} else if (dev->rebuild_prio) {
+		choose_best_source(dev);
+		dev_update_ql(dev);
+		dev->rebuild_prio = 0;
 	}
 
 	return ret;
@@ -678,6 +682,80 @@ static int dev_step_dpll(struct synce_dev *dev)
 
 
 	return ret;
+}
+
+void synce_dev_get_ql(struct synce_dev *dev, uint8_t *ql)
+{
+	struct synce_clock_source *best;
+
+	*ql = synce_get_dnu_value(dev->network_option, false);
+	if (dev->d_state != EEC_LOCKED && dev->d_state != EEC_LOCKED_HO_ACQ)
+		return;
+	if (!dev->best_source)
+		return;
+
+	best = dev->best_source;
+	if (best->type == PORT)
+		synce_port_ctrl_get_rx_ql(best->port->pc, ql);
+	else
+		*ql = best->ext_src->ql;
+}
+
+void synce_dev_get_ext_ql(struct synce_dev *dev, uint8_t *ext_ql)
+{
+	int err = 0;
+	struct synce_clock_source *best;
+	struct synce_msg_ext_ql ext_ql_msg;
+
+	*ext_ql = synce_get_dnu_value(dev->network_option, true);
+	if (dev->d_state != EEC_LOCKED && dev->d_state != EEC_LOCKED_HO_ACQ)
+		return;
+	if (!dev->best_source || !dev->extended_tlv)
+		return;
+
+	best = dev->best_source;
+	if (best->type == PORT) {
+		err = synce_port_ctrl_get_rx_ext_ql(best->port->pc,
+						    &ext_ql_msg);
+		if (!err)
+			*ext_ql = ext_ql_msg.enhancedSsmCode;
+	} else {
+		*ext_ql = best->ext_src->ext_ql;
+	}
+}
+
+int synce_dev_check_ext_src_name(struct synce_dev *dev, char *ext_src_name)
+{
+	struct synce_clock_source *c;
+
+	LIST_FOREACH(c, &dev->clock_sources, list)
+		if (c->type == EXT_SRC)
+			if (strcmp(c->ext_src->name, ext_src_name) == 0)
+				return 0;
+
+	return -1;
+}
+
+void synce_dev_set_ext_src_ql(struct synce_dev *dev, char *ext_src_name,
+			      int extended, int ql)
+{
+	struct synce_clock_source *c;
+
+	LIST_FOREACH(c, &dev->clock_sources, list) {
+		if (c->type == EXT_SRC) {
+			if (strcmp(c->ext_src->name, ext_src_name) == 0) {
+				if (extended == 0)
+					c->ext_src->ql = ql;
+				else
+					c->ext_src->ext_ql = ql;
+			}
+		}
+	}
+
+	pr_info("changed QL for %s on %s, new %s = %d", ext_src_name, dev->name,
+		extended ? "EXT_QL" : "QL", ql);
+	dev->rebuild_prio = 1;
+	synce_dev_step(dev);
 }
 
 int synce_dev_init(struct synce_dev *dev, struct config *cfg)
@@ -844,4 +922,14 @@ void synce_dev_destroy(struct synce_dev *dev)
 		dpll_mon_destroy(dev->dpll_mon);
 	destroy_clock_sources(dev);
 	destroy_dev_ctrl(dev);
+}
+
+const char *synce_dev_get_name(struct synce_dev *dev)
+{
+	if (!dev) {
+		pr_err("%s dev is NULL", __func__);
+		return NULL;
+	}
+
+	return dev->name;
 }
