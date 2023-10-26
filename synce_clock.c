@@ -7,13 +7,14 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <sys/queue.h>
-
 #include "synce_clock.h"
 #include "interface.h"
 #include "synce_dev.h"
 #include "print.h"
 #include "config.h"
+#include "synce_manager.h"
 
 #define SYNCE_CLOCK_DELAY_USEC		20000
 #define SYNCE_CLOCK_INIT_DELAY_USEC	200000
@@ -38,6 +39,7 @@ enum synce_clock_state {
 };
 
 struct synce_clock {
+	char *socket_path;
 	int num_devices;
 	int state;
 	LIST_HEAD(devices_head, synce_dev) devices;
@@ -103,6 +105,9 @@ static int create_synce_devices(struct synce_clock *clk, struct config *cfg)
 		pr_err("no devices created");
 		goto err;
 	}
+	clk->socket_path = config_get_string(cfg, NULL, "smc_socket_path");
+	if (synce_manager_start_thread(clk))
+		goto err;
 
 	pr_info("created num_devices: %d", count);
 	clk->num_devices = count;
@@ -262,6 +267,8 @@ void synce_clock_destroy(struct synce_clock *clk)
 	clk->num_devices = 0;
 	clk->state = SYNCE_CLK_UNKNOWN;
 
+	synce_manager_close_socket(clk->socket_path);
+
 	return;
 }
 
@@ -284,4 +291,24 @@ int synce_clock_poll(struct synce_clock *clk)
 	usleep(SYNCE_CLOCK_DELAY_USEC);
 
 	return ret;
+}
+
+int synce_clock_get_dev(struct synce_clock *clk, char *dev_name,
+			struct synce_dev **dev)
+{
+	struct synce_dev *dev_iter;
+
+	LIST_FOREACH(dev_iter, &clk->devices, list) {
+		if (strcmp(synce_dev_get_name(dev_iter), dev_name) == 0) {
+			*dev = dev_iter;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
+char *synce_clock_get_socket_path(struct synce_clock *clk)
+{
+	return clk->socket_path;
 }

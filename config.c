@@ -173,6 +173,7 @@ struct config_item {
 struct config_item config_tab_synce[] = {
 	GLOB_ITEM_INT("logging_level", LOG_INFO, PRINT_LEVEL_MIN, PRINT_LEVEL_MAX),
 	GLOB_ITEM_STR("message_tag", NULL),
+	GLOB_ITEM_STR("smc_socket_path", "/tmp/synce4l_socket"),
 	GLOB_ITEM_INT("use_syslog", 1, 0, 1),
 	GLOB_ITEM_STR("userDescription", ""),
 	GLOB_ITEM_INT("verbose", 0, 0, 1),
