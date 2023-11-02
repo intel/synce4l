@@ -713,9 +713,10 @@ err_attr:
 uint16_t get_priority_params(struct synce_port_ctrl *pc,
 			     const uint16_t **priority_list)
 {
-	*priority_list = pc->priority_list;
-	if (!priority_list)
+	if (!pc || !pc->priority_list)
 		return 0;
+	*priority_list = pc->priority_list;
+
 	return pc->priority_list_count;
 }
 
