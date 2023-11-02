@@ -91,7 +91,6 @@ static int init_port_ql_val(struct synce_port *port, int network_option)
 		return -EFAULT;
 	}
 
-	port->ql_forced = port->ql_forced;
 	port->ql_dnu = synce_get_dnu_value(network_option, false);
 	port->ql = port->ql_dnu;
 

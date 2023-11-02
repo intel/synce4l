@@ -318,7 +318,7 @@ static enum parser_result parse_item(struct config *cfg,
 	enum parser_result r;
 	uint64_t u64 = 0;
 	double df = 0.0;
-	int val;
+	int val = 0;
 
 	r = parse_fault_interval(cfg, section, option, value);
 	if (r != NOT_PARSED)

@@ -581,6 +581,8 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 	if (!best)
 		return 0;
 	arr = calloc(dev->num_clock_sources, sizeof(*arr));
+	if (!arr)
+		return -ENOMEM;
 	arr[i++] = best;
 	LIST_FOREACH(tmp, &dev->clock_sources, list) {
 		if (tmp == best)
@@ -667,10 +669,11 @@ static int dev_step_dpll(struct synce_dev *dev)
 			dev->best_source = NULL;
 		else
 			dev->best_source = active;
-		if (dev->best_source)
+		if (dev->best_source) {
 			dev_update_ql(dev);
-		pr_info("EEC_LOCKED/EEC_LOCKED_HO_ACQ on %s of %s",
-			dev->best_source->port->name, dev->name);
+			pr_info("EEC_LOCKED/EEC_LOCKED_HO_ACQ on %s of %s",
+				dev->best_source->port->name, dev->name);
+		}
 	}
 
 

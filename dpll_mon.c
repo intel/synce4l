@@ -888,7 +888,6 @@ struct dpll_mon_pin
 		  enum dpll_pin_type type)
 {
 	struct dpll_mon_pin *pin = pin_create();
-	int ret = 0;
 
 	if (!pin)
 		return NULL;
@@ -899,8 +898,7 @@ struct dpll_mon_pin
 	pin->valid = PIN_VALID;
 	STAILQ_INSERT_TAIL(&dm->pins, pin, list);
 	pr_debug_pin("adding valid pin", pin);
-	if (ret)
-		pr_debug_pin("failed to send get id request", pin);
+
 	return pin;
 }
 
