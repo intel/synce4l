@@ -21,6 +21,7 @@
  */
 #include <ctype.h>
 #include <float.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -767,7 +768,7 @@ config_get_u64(struct config *cfg, const char *section, const char *option)
 		pr_err("bug: config option %s type mismatch!", option);
 		exit(-1);
 	}
-	pr_debug("config item %s.%s is %lu (0x%lx)", section, option,
+	pr_debug("config item %s.%s is %"PRIu64" (0x%"PRIx64")", section, option,
 		 ci->val.u64, ci->val.u64);
 	return ci->val.u64;
 }
