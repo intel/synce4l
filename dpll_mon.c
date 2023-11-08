@@ -331,7 +331,7 @@ static void update_muxed_pin(struct dpll_mon *dm, uint32_t pin_id,
 			     struct nlattr *a, int exist, int notify)
 {
 	int parent_pin_id_valid = 0, pin_state_valid = 0, rem;
-	uint32_t parent_pin_id, pin_state;
+	uint32_t parent_pin_id = 0, pin_state = 0;
 	struct dpll_mon_pin *pin, *parent;
 	struct nlattr *an;
 
