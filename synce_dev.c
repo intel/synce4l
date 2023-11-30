@@ -525,6 +525,7 @@ static void choose_best_source(struct synce_dev *dev)
 				dev->name);
 		} else {
 			dev->ext_src_is_best = ext_src_is_best;
+			dev->best_source = NULL;
 			/* if input source is changing
 			 * current input is invalid, send DNU and wait
 			 * for EEC being locked in further dev_step
@@ -555,14 +556,13 @@ static int dev_step_line_input(struct synce_dev *dev)
 
 	if (rx_ql_changed(dev)) {
 		choose_best_source(dev);
-	} else if (dev->best_source && dev->best_source->type == PORT) {
-		if (synce_port_rx_ql_failed(dev->best_source->port)) {
-			synce_port_invalidate_rx_ql(dev->best_source->port);
-			force_all_eecs_detach(dev);
-			dev_update_ql(dev);
-			dev->best_source = NULL;
-			choose_best_source(dev);
-		}
+	} else if (dev->best_source && dev->best_source->type == PORT &&
+		   synce_port_rx_ql_failed(dev->best_source->port)) {
+		synce_port_invalidate_rx_ql(dev->best_source->port);
+		force_all_eecs_detach(dev);
+		dev_update_ql(dev);
+		dev->best_source = NULL;
+		choose_best_source(dev);
 	} else if (dev->rebuild_prio) {
 		choose_best_source(dev);
 		dev_update_ql(dev);
@@ -775,6 +775,7 @@ int synce_dev_init(struct synce_dev *dev, struct config *cfg)
 	dev->recover_time = config_get_int(cfg, dev->name, "recover_time");
 	dev->best_source = NULL;
 	dev->ext_src_is_best = false;
+	dev->rebuild_prio = 0;
 	eec_get_state_cmd = config_get_string(cfg, dev->name, "eec_get_state_cmd");
 	ess.holdover = config_get_string(cfg, dev->name, "eec_holdover_value");
 	ess.locked_ho = config_get_string(cfg, dev->name, "eec_locked_ho_value");
