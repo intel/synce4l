@@ -357,7 +357,6 @@ static void detach_clock_source_eec(struct synce_clock_source *clock_source,
 static void force_all_eecs_detach(struct synce_dev *dev)
 {
 	struct synce_clock_source *p;
-	enum eec_state state;
 
 	LIST_FOREACH(p, &dev->clock_sources, list) {
 		pr_debug("trying to detach EEC Source CLK for %s",
@@ -365,14 +364,11 @@ static void force_all_eecs_detach(struct synce_dev *dev)
 		detach_clock_source_eec(p, dev);
 	}
 
-	if (synce_dev_ctrl_get_state(dev->dc, &state)) {
+	if (synce_dev_ctrl_get_state(dev->dc, &dev->d_state)) {
 		pr_err("failed getting EEC state");
-		dev->last_d_state = EEC_UNKNOWN;
 		dev->d_state = EEC_UNKNOWN;
-	} else {
-		dev->last_d_state = state;
-		dev->d_state = state;
 	}
+	dev->last_d_state = dev->d_state;
 }
 
 static void dev_update_ql(struct synce_dev *dev)
