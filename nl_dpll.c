@@ -9,6 +9,7 @@
 #include <netlink/genl/ctrl.h>
 #include <linux/rtnetlink.h>
 #include <errno.h>
+#include <inttypes.h>
 #include "nl_dpll.h"
 #include "print.h"
 
