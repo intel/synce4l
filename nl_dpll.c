@@ -118,7 +118,7 @@ int nl_dpll_device_id_get(struct nl_sock *sk, struct sk_arg *arg,
 		pr_err("%s: failed to send request", __func__);
 		goto msg_free;
 	}
-	pr_debug("DEVICE_ID_GET request sent dpll id: %lu %s, ret:%d",
+	pr_debug("DEVICE_ID_GET request sent dpll id: %" PRIu64 " %s, ret:%d",
 		 clock_id, module_name, ret);
 
 	arg->err = 0;
