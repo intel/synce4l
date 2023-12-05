@@ -21,8 +21,8 @@
 
 struct synce_clock;
 
-void synce_manager_generate_err_tlv(struct synce_manager_tlv **err_tlv,
-				    char *err_str)
+static void synce_manager_generate_err_tlv(struct synce_manager_tlv **err_tlv,
+					   char *err_str)
 {
 	*err_tlv = malloc(sizeof(struct synce_manager_tlv));
 	if (!*err_tlv) {
@@ -234,7 +234,7 @@ int synce_manager_generate_response(struct synce_manager_tlv *resp_tlv,
 	return 0;
 }
 
-void *synce_manager_server_thread(void *arg)
+static void *synce_manager_server_thread(void *arg)
 {
 	struct synce_clock *clk = (struct synce_clock *)arg;
 	int tlv_num, ret, i, resp_len, bytes_read;
