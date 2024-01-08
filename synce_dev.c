@@ -660,6 +660,10 @@ static int dev_step_dpll(struct synce_dev *dev)
 		dev->best_source = active;
 		pr_info("EEC_LOCKED/EEC_LOCKED_HO_ACQ on %s of %s",
 			dev->best_source->ext_src->name, dev->name);
+		LIST_FOREACH(c, &dev->clock_sources, list) {
+			if (c->type == PORT)
+				set_port_ql_from_ext_src(dev, c->port, active->ext_src);
+		}
 		dev_update_ql(dev);
 	} else if (active->type == PORT) {
 		dev->ext_src_is_best = 0;
