@@ -128,4 +128,14 @@ int synce_ext_src_is_active(struct dpll_mon *dpll_mon,
 int synce_ext_src_prio_set(struct dpll_mon *dpll_mon,
 			   struct synce_ext_src *ext_src, uint32_t prio);
 
+/**
+ * request to set priority of a external source associated pin to dnu_prio
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param ext_src	Configured instance
+ * @return		0 - success, error code - failure
+ */
+int synce_ext_src_prio_clear(struct dpll_mon *dpll_mon,
+			     struct synce_ext_src *ext_src);
+
 #endif /* HAVE_SYNCE_EXT_SRC_H */

@@ -132,4 +132,14 @@ int synce_clock_source_prio_set(struct dpll_mon *dpll_mon,
 				struct synce_clock_source *clk_src,
 				uint32_t prio);
 
+/**
+ * request to set priority of a clock source pin on a dpll to dnu_prio
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param clk_src	Configured instance
+ * @return		0 - success, error code - failure
+ */
+int synce_clock_source_prio_clear(struct dpll_mon *dpll_mon,
+				  struct synce_clock_source *clk_src);
+
 #endif /* HAVE_SYNCE_CLOCK_SOURCE_H */
