@@ -192,4 +192,13 @@ int synce_port_is_active(struct dpll_mon *dpll_mon, struct synce_port *port);
 int synce_port_prio_set(struct dpll_mon *dpll_mon, struct synce_port *port,
 			uint32_t prio);
 
+/**
+ * request to set priority of a port pin on a dpll to dnu_prio
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param port		Configured instance
+ * @return		0 - success, error code - failure
+ */
+int synce_port_prio_clear(struct dpll_mon *dpll_mon, struct synce_port *port);
+
 #endif /* HAVE_SYNCE_PORT_H */

@@ -972,7 +972,7 @@ int set_prio(struct dpll_mon *dm, uint32_t pin_id, uint32_t prio)
 				    dm->dpll_id, prio);
 }
 
-static int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
+int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 {
 	struct dpll_mon_pin *parent;
 	struct parent_pin *pp;

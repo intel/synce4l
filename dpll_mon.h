@@ -120,6 +120,15 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 			  uint32_t prio);
 
 /**
+ * Request to reset the priority of a pin to dnu_prio.
+ *
+ * @param dm		Instance of dpll mon which owns the pin.
+ * @param pin		Valid pointer to a pin.
+ * @return		0 - success, negative - failed to send request
+ */
+int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+
+/**
  * Request to set Do Not Use priority on all valid pins for all the pins
  * controlled by the dpll_mon's dpll.
  *

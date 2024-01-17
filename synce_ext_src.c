@@ -204,3 +204,9 @@ int synce_ext_src_prio_set(struct dpll_mon *dpll_mon,
 {
 	return dpll_mon_pin_prio_set(dpll_mon, ext_src->pin, prio);
 }
+
+int synce_ext_src_prio_clear(struct dpll_mon *dpll_mon,
+			     struct synce_ext_src *ext_src)
+{
+	return dpll_mon_pin_prio_clear(dpll_mon, ext_src->pin);
+}
