@@ -573,13 +573,14 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 	struct synce_clock_source *tmp, *tmp_best, **arr, *best, *prev_tmp = NULL;
 	int i = 0, prio_count;
 
-	if (dpll_mon_pins_prio_dnu_set(dev->dpll_mon)) {
-		pr_err("failed to set DNU priorities on %s", dev->name);
-		return -EIO;
-	}
 	best = find_dev_best_clock_source(dev);
-	if (!best)
+	if (!best) {
+		if (dpll_mon_pins_prio_dnu_set(dev->dpll_mon)) {
+			pr_err("failed to set DNU priorities on %s", dev->name);
+			return -EIO;
+		}
 		return 0;
+	}
 	arr = calloc(dev->num_clock_sources, sizeof(*arr));
 	if (!arr)
 		return -ENOMEM;
@@ -616,6 +617,13 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 	}
 	prio_count = i;
 	pr_debug("considered valid clock sources num: %d on %s", i, dev->name);
+	LIST_FOREACH(tmp, &dev->clock_sources, list) {
+		for (i = 0; i < prio_count; i++)
+			if (tmp == arr[i])
+				break;
+		if (i == prio_count)
+			synce_clock_source_prio_clear(dev->dpll_mon, tmp);
+	}
 	for (i = 0; i < prio_count; i++)
 		synce_clock_source_prio_set(dev->dpll_mon, arr[i], i);
 	free(arr);
