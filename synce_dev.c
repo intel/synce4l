@@ -927,8 +927,10 @@ void synce_dev_destroy(struct synce_dev *dev)
 	if (dev->state != DEVICE_FAILED && !dev->dpll_mon)
 		force_all_eecs_detach(dev);
 
-	if (dev->dpll_mon)
+	if (dev->dpll_mon) {
+		dpll_mon_pins_prio_dnu_set(dev->dpll_mon);
 		dpll_mon_destroy(dev->dpll_mon);
+	}
 	destroy_clock_sources(dev);
 	destroy_dev_ctrl(dev);
 }
