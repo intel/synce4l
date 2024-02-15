@@ -21,9 +21,10 @@
 
 #define MAX_ATTR ((int)DPLL_A_MAX > (int)DPLL_A_PIN_MAX ? \
 	DPLL_A_MAX : DPLL_A_PIN_MAX)
-#define PIN_READY_TRIES 10
-#define PIN_VALID	1
-#define PARENT_VALID	2
+#define PIN_READY_TRIES		10
+#define PIN_VALID		1
+#define PARENT_VALID		2
+#define PARENT_NOT_USED		0xffffffff
 
 enum dpll_mon_state {
 	DPLL_MON_STATE_INVALID,
@@ -61,7 +62,7 @@ struct dpll_mon_pin {
 	int valid;
 	int muxed;
 	int ready;
-	int parent_in_use;
+	uint32_t parent_used_by;
 	int prio_valid;
 
 	STAILQ_HEAD(parents_head, parent_pin) parents;
@@ -214,6 +215,7 @@ static struct dpll_mon_pin *pin_create(void)
 		return NULL;
 	}
 	pr_debug("%s %p", __func__, pin);
+	pin->parent_used_by = PARENT_NOT_USED;
 	STAILQ_INIT(&pin->parents);
 
 	return pin;
@@ -968,6 +970,7 @@ int connect_parent(struct dpll_mon *dm, uint32_t pin_id, uint32_t parent_id)
 
 int set_prio(struct dpll_mon *dm, uint32_t pin_id, uint32_t prio)
 {
+	pr_debug("trying set prio=%u for pin:%u on %s", prio, pin_id, dm->name);
 	return nl_dpll_pin_prio_set(dm->dev_sk, dm->family, pin_id,
 				    dm->dpll_id, prio);
 }
@@ -983,7 +986,7 @@ int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 	STAILQ_FOREACH(pp, &pin->parents, list) {
 		if (pp->state == DPLL_PIN_STATE_CONNECTED) {
 			parent = find_pin(dm, pp->id);
-			parent->parent_in_use = 0;
+			parent->parent_used_by = PARENT_NOT_USED;
 			ret = disconnect_parent(dm, pin->id, parent->id);
 			if (ret < 0)
 				return ret;
@@ -1006,14 +1009,22 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 		pr_err("setting prio to DNU not allowed");
 		return -EINVAL;
 	}
-	pr_debug("trying set prio=%u for pin:%u on %s",
-		 prio, pin->id, dm->name);
 	if (pin->prio_valid)
-		return nl_dpll_pin_prio_set(dm->dev_sk, dm->family, pin->id,
-					    dm->dpll_id, prio);
+		return set_prio(dm, pin->id, prio);
+
 	STAILQ_FOREACH(pp, &pin->parents, list) {
 		parent = find_pin(dm, pp->id);
-		if (parent->parent_in_use)
+		if (parent->parent_used_by == pin->id) {
+			pr_debug("parent present(id:%u) prio=%u for pin:%u on %s",
+				 parent->id, parent->prio, pin->id, dm->name);
+			if (parent->prio != prio)
+				return set_prio(dm, parent->id, prio);
+			return 0;
+		}
+	}
+	STAILQ_FOREACH(pp, &pin->parents, list) {
+		parent = find_pin(dm, pp->id);
+		if (parent->parent_used_by != PARENT_NOT_USED)
 			continue;
 		ret = connect_parent(dm, pin->id, parent->id);
 		if (ret < 0) {
@@ -1027,10 +1038,10 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 				 prio, pin->id, parent->id, dm->name);
 			return ret;
 		}
-		parent->parent_in_use = 1;
+		parent->parent_used_by = pin->id;
 		return 0;
 	}
-	pr_debug("unused parent not available for pin:%u priority set on %s",
+	pr_debug("unused parent not available for pin:%u for priority set on %s",
 		 pin->id, dm->name);
 
 	return 0;
