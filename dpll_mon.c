@@ -85,6 +85,7 @@ struct dpll_mon {
 	struct sk_arg rt_args;
 	uint32_t dev_dnu_prio;
 	int init_err;
+	pthread_mutex_t lock;
 
 	STAILQ_HEAD(pins_head, dpll_mon_pin) pins;
 };
@@ -97,6 +98,30 @@ static const enum eec_state lock_status_to_state[] = {
 };
 
 static int dpll_mon_recv(struct nl_msg *msg, void *arg);
+
+static int lock_mutex(struct dpll_mon *dm, const char *func)
+{
+	int ret = pthread_mutex_lock(&dm->lock);
+
+	if (ret) {
+		pr_err("%s: lock mutex failed err: %d on %s",
+		       func, ret, dm->name);
+	}
+
+	return ret;
+}
+
+static int unlock_mutex(struct dpll_mon *dm, const char *func)
+{
+	int ret = pthread_mutex_unlock(&dm->lock);
+
+	if (ret) {
+		pr_err("%s: lock mutex failed err: %d on %s",
+		       func, ret, dm->name);
+	}
+
+	return ret;
+}
 
 static void dpll_mon_state_set(struct dpll_mon *dm, enum dpll_mon_state state)
 {
@@ -486,6 +511,7 @@ static int dpll_mon_ntf_recv(struct nl_msg *msg, void *arg)
 		pr_err("genlsmg_parse err:%d", ret);
 		return ret;
 	}
+	lock_mutex(dm, __func__);
 	switch (gnlh->cmd) {
 	case DPLL_CMD_DEVICE_CREATE_NTF:
 		if ((dm->state == DPLL_MON_STATE_INIT_READY ||
@@ -513,6 +539,7 @@ static int dpll_mon_ntf_recv(struct nl_msg *msg, void *arg)
 	default:
 		break;
 	}
+	unlock_mutex(dm, __func__);
 
 	return NL_OK;
 }
@@ -540,12 +567,13 @@ static int dpll_rt_recv(struct nl_msg *msg, void *arg)
 		return ret;
 	}
 	info = nlmsg_data(nlh);
+	lock_mutex(dm, __func__);
 	pin = find_pin_by_if_index(dm, info->ifi_index);
 	if (!tb[IFLA_DPLL_PIN])
-		return NL_OK;
+		goto unlock;
 	nla_parse_nested(an, DPLL_A_PIN_ID, tb[IFLA_DPLL_PIN], NULL);
 	if (!an[DPLL_A_PIN_ID])
-		return NL_OK;
+		goto unlock;
 	pin_id = nla_get_u32(an[DPLL_A_PIN_ID]);
 	if (pin) {
 		pin->id = pin_id;
@@ -557,6 +585,9 @@ static int dpll_rt_recv(struct nl_msg *msg, void *arg)
 			pr_debug_pin("pin assigned if_index", pin);
 		}
 	}
+
+unlock:
+	unlock_mutex(dm, __func__);
 
 	return NL_OK;
 }
@@ -580,6 +611,7 @@ static int dpll_mon_recv(struct nl_msg *msg, void *arg)
 		pr_err("genlsmg_parse err:%d", ret);
 		return ret;
 	}
+	lock_mutex(dm, __func__);
 	switch (gnlh->cmd) {
 	case DPLL_CMD_DEVICE_ID_GET:
 		if (dm->state == DPLL_MON_STATE_INIT_READY)
@@ -602,6 +634,7 @@ static int dpll_mon_recv(struct nl_msg *msg, void *arg)
 	default:
 		break;
 	}
+	unlock_mutex(dm, __func__);
 
 	return NL_OK;
 }
@@ -836,6 +869,8 @@ void dpll_mon_destroy(struct dpll_mon *dm)
 		STAILQ_REMOVE_HEAD(&dm->pins, list);
 		pin_destroy(pin);
 	}
+	pthread_mutex_destroy(&dm->lock);
+
 	free(dm);
 }
 
@@ -865,6 +900,10 @@ int dpll_mon_init(struct dpll_mon *dm)
 	if (ret) {
 		dpll_mon_destroy(dm);
 		return ret;
+	}
+	if (pthread_mutex_init(&dm->lock, NULL)) {
+		pr_err("%s: dpll_mon mutex init failure", dm->name);
+		return -EFAULT;
 	}
 
 	return 0;
