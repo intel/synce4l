@@ -257,6 +257,20 @@ static void pin_destroy(struct dpll_mon_pin *pin)
 	free(pin);
 }
 
+void remove_no_ifname_pin(struct dpll_mon *dm, uint32_t pin_id)
+{
+	struct dpll_mon_pin *pin;
+
+	STAILQ_FOREACH(pin, &dm->pins, list)
+		if (pin && pin_id == pin->id && pin->ifname == NULL) {
+			pr_debug_pin("removed duplicated pin", pin);
+			STAILQ_REMOVE(&dm->pins, pin, dpll_mon_pin, list);
+			pin_destroy(pin);
+			pin = NULL;
+			return;
+		}
+}
+
 static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 		       int exist, int notify)
 {
@@ -576,6 +590,7 @@ static int dpll_rt_recv(struct nl_msg *msg, void *arg)
 		goto unlock;
 	pin_id = nla_get_u32(an[DPLL_A_PIN_ID]);
 	if (pin) {
+		remove_no_ifname_pin(dm, pin_id);
 		pin->id = pin_id;
 		pr_debug_pin("pin assigned id", pin);
 	} else {
