@@ -138,4 +138,15 @@ int synce_ext_src_prio_set(struct dpll_mon *dpll_mon,
 int synce_ext_src_prio_clear(struct dpll_mon *dpll_mon,
 			     struct synce_ext_src *ext_src);
 
+/**
+ * request to get current priority of a pin associated with external source
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param ext_src	Configured instance
+ * @param prio		On success current priority of the external source
+ * @return		0 - success, error code - failure
+ */
+int synce_ext_src_prio_get(struct dpll_mon *dpll_mon,
+			   struct synce_ext_src *ext_src, uint32_t *prio);
+
 #endif /* HAVE_SYNCE_EXT_SRC_H */

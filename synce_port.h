@@ -201,4 +201,15 @@ int synce_port_prio_set(struct dpll_mon *dpll_mon, struct synce_port *port,
  */
 int synce_port_prio_clear(struct dpll_mon *dpll_mon, struct synce_port *port);
 
+/**
+ * request to get priority of a port pin
+ *
+ * @param dpll_mon	Pointer to dpll_mon class
+ * @param port		Configured instance
+ * @param prio		On success current priority of the synce_port
+ * @return		0 - success, error code - failure
+ */
+int synce_port_prio_get(struct dpll_mon *dpll_mon, struct synce_port *port,
+			uint32_t *prio);
+
 #endif /* HAVE_SYNCE_PORT_H */

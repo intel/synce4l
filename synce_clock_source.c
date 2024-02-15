@@ -235,3 +235,19 @@ int synce_clock_source_prio_clear(struct dpll_mon *dpll_mon,
 		return synce_port_prio_clear(dpll_mon, clk_src->port);
 	return synce_ext_src_prio_clear(dpll_mon, clk_src->ext_src);
 }
+
+int synce_clock_source_prio_get(struct dpll_mon *dpll_mon,
+				struct synce_clock_source *clk_src,
+				uint32_t *prio)
+{
+	if (!clk_src) {
+		pr_err("%s clock_source is NULL", __func__);
+		return -ENODEV;
+	}
+	pr_debug("%s: on %s", __func__,
+		 clk_src->type == PORT ? clk_src->port->name :
+		 clk_src->ext_src->name);
+	if (clk_src->type == PORT)
+		return synce_port_prio_get(dpll_mon, clk_src->port, prio);
+	return synce_ext_src_prio_get(dpll_mon, clk_src->ext_src, prio);
+}

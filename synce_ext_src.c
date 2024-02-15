@@ -210,3 +210,9 @@ int synce_ext_src_prio_clear(struct dpll_mon *dpll_mon,
 {
 	return dpll_mon_pin_prio_clear(dpll_mon, ext_src->pin);
 }
+
+int synce_ext_src_prio_get(struct dpll_mon *dpll_mon,
+			   struct synce_ext_src *ext_src, uint32_t *prio)
+{
+	return dpll_mon_pin_prio_get(dpll_mon, ext_src->pin, prio);
+}
