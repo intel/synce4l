@@ -572,6 +572,7 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 {
 	struct synce_clock_source *tmp, *tmp_best, **arr, *best, *prev_tmp = NULL;
 	int i = 0, prio_count;
+	uint32_t prio;
 
 	best = find_dev_best_clock_source(dev);
 	if (!best) {
@@ -617,6 +618,7 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 	}
 	prio_count = i;
 	pr_debug("considered valid clock sources num: %d on %s", i, dev->name);
+	/* invalidate obsolate sources */
 	LIST_FOREACH(tmp, &dev->clock_sources, list) {
 		for (i = 0; i < prio_count; i++)
 			if (tmp == arr[i])
@@ -624,8 +626,13 @@ int rebuild_inputs_prio(struct synce_dev *dev)
 		if (i == prio_count)
 			synce_clock_source_prio_clear(dev->dpll_mon, tmp);
 	}
-	for (i = 0; i < prio_count; i++)
+	/* update priorities on valid sources */
+	for (i = 0; i < prio_count; i++) {
+		if (!synce_clock_source_prio_get(dev->dpll_mon, arr[i], &prio))
+			if ((int)prio == i)
+				continue;
 		synce_clock_source_prio_set(dev->dpll_mon, arr[i], i);
+	}
 	free(arr);
 	dev->rebuild_prio = 0;
 

@@ -998,6 +998,27 @@ int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 	return 0;
 }
 
+int dpll_mon_pin_prio_get(struct dpll_mon *dm, struct dpll_mon_pin *pin,
+			  uint32_t *prio)
+{
+	struct dpll_mon_pin *parent;
+	struct parent_pin *pp;
+
+	if (pin->prio_valid) {
+		*prio = pin->prio;
+		return 0;
+	}
+	STAILQ_FOREACH(pp, &pin->parents, list) {
+		parent = find_pin(dm, pp->id);
+		if (parent->parent_used_by == pin->id) {
+			*prio = parent->prio;
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
 int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 			  uint32_t prio)
 {

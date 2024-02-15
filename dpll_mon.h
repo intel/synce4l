@@ -129,6 +129,17 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin);
 
 /**
+ * Request to get the priority of a pin.
+ *
+ * @param dm		Instance of dpll mon which owns the pin.
+ * @param pin		Valid pointer to a pin.
+ * @param prio		On success current pin prio.
+ * @return		0 - success, negative - failed to send request
+ */
+int dpll_mon_pin_prio_get(struct dpll_mon *dm, struct dpll_mon_pin *pin,
+			  uint32_t *prio);
+
+/**
  * Request to set Do Not Use priority on all valid pins for all the pins
  * controlled by the dpll_mon's dpll.
  *

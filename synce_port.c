@@ -478,3 +478,9 @@ int synce_port_prio_clear(struct dpll_mon *dpll_mon, struct synce_port *port)
 {
 	return dpll_mon_pin_prio_clear(dpll_mon, port->pin);
 }
+
+int synce_port_prio_get(struct dpll_mon *dpll_mon, struct synce_port *port,
+			uint32_t *prio)
+{
+	return dpll_mon_pin_prio_get(dpll_mon, port->pin, prio);
+}
