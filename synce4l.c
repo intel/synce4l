@@ -13,6 +13,7 @@
 #include <errno.h>
 
 #include "synce_clock.h"
+#include "synce_thread_common.h"
 #include "config.h"
 #include "print.h"
 #include "util.h"
@@ -27,6 +28,7 @@ static void usage(char *progname)
 		"           (command line arguments takes precedence over config file)\n"
 		" -l [num]  set the logging level to 'num'\n"
 		"           (%d: least detailed, %d: most detailed)\n"
+		" -p [num]  sleep time between subsequent SyncE clock polls (default:20) [milisecond]\n"
 		" -m        print messages to stdout\n"
 		" -q        do not print messages to the syslog\n"
 		" -v        print synce4l version and exit\n"
@@ -56,7 +58,7 @@ int unused()
 
 int main(int argc, char *argv[])
 {
-	int c, err = -EACCES, index, print_level;
+	int c, err = -EACCES, index, print_level, poll_interval;
 	char *config = NULL, *progname;
 	struct synce_clock *clock;
 	struct option *opts;
@@ -74,7 +76,7 @@ int main(int argc, char *argv[])
 	/* Process the command line arguments. */
 	progname = strrchr(argv[0], '/');
 	progname = progname ? 1+progname : argv[0];
-	while (EOF != (c = getopt_long(argc, argv, "f:l:mqvh",
+	while (EOF != (c = getopt_long(argc, argv, "f:l:mp:q:vh",
 				       opts, &index))) {
 		switch (c) {
 		case 'f':
@@ -88,6 +90,14 @@ int main(int argc, char *argv[])
 			break;
 		case 'm':
 			config_set_int(cfg, "verbose", 1);
+			break;
+		case 'p':
+			if (get_arg_val_i(c, optarg, &poll_interval,
+					  CLOCK_POLL_INTERVAL_MIN,
+					  CLOCK_POLL_INTERVAL_MAX))
+				goto out;
+			config_set_int(cfg, "poll_interval_msec",
+				       poll_interval);
 			break;
 		case 'q':
 			config_set_int(cfg, "use_syslog", 0);

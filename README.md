@@ -117,15 +117,17 @@ usage: synce4l [options]
 
 ### Global section
 
-This section starts with `[global]` keyword. It sets the logging options.
+This section starts with `[global]` keyword, consist of configuration items
+related to a running synce4l instance.
 
-| Parameter         | Default               | Valid values | Description                                                       |
-| ----------------- | --------------------- | ------------ | ----------------------------------------------------------------- |
-| `logging_level`   | `6`                   | `0-7`        | Minimum log level required to appear in a log.                    |
-| `message_tag`     | None                  | string       | Tag reported in a log.                                            |
-| `smc_socket_path` | `/tmp/synce4l_socket` | string       | Full path to socket file for external application communication . |
-| `use_syslog`      | `1`                   | `0`, `1`     | Set to 1 if `syslog` should be used.                              |
-| `verbose`         | `0`                   | `0`, `1`     | Set to 1 to log extra information.                                |
+| Parameter            | Default               | Valid values | Description                                                     |
+| -------------------- | --------------------- | ------------ | --------------------------------------------------------------- |
+| `logging_level`      | `6`                   | `0-7`        | Minimum log level required to appear in a log.                  |
+| `message_tag`        | None                  | string       | Tag reported in a log.                                          |
+| `poll_interval_msec` | 20                    | 0-500        | Sleep time between subsequent SyncE clock polls                 |
+| `smc_socket_path`    | `/tmp/synce4l_socket` | string       | Full path to socket file for external application communication |
+| `use_syslog`         | `1`                   | `0`, `1`     | Set to 1 if `syslog` should be used.                            |
+| `verbose`            | `0`                   | `0`, `1`     | Set to 1 to log extra information.                              |
 
 ### Device section
 

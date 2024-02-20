@@ -33,6 +33,7 @@
 #include "hash.h"
 #include "print.h"
 #include "util.h"
+#include "synce_thread_common.h"
 
 struct interface {
 	STAILQ_ENTRY(interface) list;
@@ -65,7 +66,6 @@ typedef union {
 	char *s;
 	uint64_t u64;
 } any_t;
-
 
 #define CONFIG_LABEL_SIZE 32
 
@@ -173,6 +173,8 @@ struct config_item {
 struct config_item config_tab_synce[] = {
 	GLOB_ITEM_INT("logging_level", LOG_INFO, PRINT_LEVEL_MIN, PRINT_LEVEL_MAX),
 	GLOB_ITEM_STR("message_tag", NULL),
+	GLOB_ITEM_INT("poll_interval_msec", 20, CLOCK_POLL_INTERVAL_MIN,
+		      CLOCK_POLL_INTERVAL_MAX),
 	GLOB_ITEM_STR("smc_socket_path", "/tmp/synce4l_socket"),
 	GLOB_ITEM_INT("use_syslog", 1, 0, 1),
 	GLOB_ITEM_STR("userDescription", ""),
