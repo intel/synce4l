@@ -62,14 +62,17 @@ which will participate in best source selection algorithm for EEC.
 
 ## 2\. Compilation
 
-With introduction of support for Linux dpll subsystem it is required to
-have linbl3-devel package (or equivalent) installed during compilation.
-
 Makefile rules are included in `Makefile` and compilation is done using
 the command:
 ```
 make synce4l
 ```
+
+### External library dependencies
+A compilation and further usage of synce4l requires following libraries:
+- glibc (which includes also required: libm, libpthread, librt)
+- libnl-3
+- libnl-genl-3
 
 ---
 
