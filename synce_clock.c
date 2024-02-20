@@ -15,8 +15,8 @@
 #include "print.h"
 #include "config.h"
 #include "synce_manager.h"
+#include "synce_thread_common.h"
 
-#define SYNCE_CLOCK_DELAY_USEC		20000
 #define SYNCE_CLOCK_INIT_DELAY_USEC	200000
 #define SYNCE_CLOCK_PAUSED_DELAY_USEC	1000000
 #define SYNCE_CLOCK_INIT_N_TRIES	10
@@ -42,6 +42,7 @@ struct synce_clock {
 	char *socket_path;
 	int num_devices;
 	int state;
+	int poll_interval_usec;
 	LIST_HEAD(devices_head, synce_dev) devices;
 };
 
@@ -220,8 +221,8 @@ static int verify_clock_state(struct synce_clock *clk)
 
 struct synce_clock *synce_clock_create(struct config *cfg)
 {
+	int err, poll_interval_msec;
 	struct synce_clock *clk;
-	int err;
 
 	if (!cfg) {
 		pr_err("%s cfg is NULL", __func__);
@@ -244,6 +245,8 @@ struct synce_clock *synce_clock_create(struct config *cfg)
 	if (err) {
 		goto destroy;
 	}
+	poll_interval_msec = config_get_int(cfg, NULL, "poll_interval_msec");
+	clk->poll_interval_usec = MSEC_TO_USEC(poll_interval_msec);
 
 	return clk;
 
@@ -288,7 +291,7 @@ int synce_clock_poll(struct synce_clock *clk)
 			}
 		}
 	}
-	usleep(SYNCE_CLOCK_DELAY_USEC);
+	usleep(clk->poll_interval_usec);
 
 	return ret;
 }
