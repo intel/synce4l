@@ -568,75 +568,80 @@ static int dev_step_line_input(struct synce_dev *dev)
 	return ret;
 }
 
+static bool source_invalid(struct synce_clock_source *c)
+{
+	if (c->type == PORT)
+		return synce_port_is_rx_dnu(c->port) ||
+		       synce_port_rx_ql_failed(c->port);
+	return false;
+}
+
 int rebuild_inputs_prio(struct synce_dev *dev)
 {
-	struct synce_clock_source *tmp, *tmp_best, **arr, *best, *prev_tmp = NULL;
-	int i = 0, prio_count;
+	struct synce_clock_source *c, *best_c, **all, **prioritized;
+	int i = 0, prio_count = 0, j, best_c_idx, ret;
 	uint32_t prio;
 
-	best = find_dev_best_clock_source(dev);
-	if (!best) {
-		if (dpll_mon_pins_prio_dnu_set(dev->dpll_mon)) {
-			pr_err("failed to set DNU priorities on %s", dev->name);
-			return -EIO;
-		}
-		return 0;
-	}
-	arr = calloc(dev->num_clock_sources, sizeof(*arr));
-	if (!arr)
+	all = calloc(dev->num_clock_sources, sizeof(*all));
+	if (!all)
 		return -ENOMEM;
-	arr[i++] = best;
-	LIST_FOREACH(tmp, &dev->clock_sources, list) {
-		if (tmp == best)
-			continue;
-		if (!prev_tmp) {
-			prev_tmp = tmp;
-			continue;
+	prioritized = calloc(dev->num_clock_sources, sizeof(*prioritized));
+	if (!prioritized) {
+		free(all);
+		return -ENOMEM;
+	}
+	LIST_FOREACH(c, &dev->clock_sources, list)
+		all[i++] = c;
+
+	for (i = 0; i < dev->num_clock_sources; i++) {
+		best_c = NULL;
+		for (j = 0; j < dev->num_clock_sources; j++) {
+			c = all[j];
+			if (best_c != c &&
+			    synce_clock_source_compare_ql(best_c, c) == c) {
+				if (source_invalid(c))
+					continue;
+				best_c = c;
+				best_c_idx = j;
+			}
 		}
-		if (synce_clock_source_compare_ql(tmp, prev_tmp) == tmp) {
-			tmp_best = tmp;
+		if (best_c) {
+			prioritized[prio_count++] = best_c;
+			all[best_c_idx] = NULL;
 		} else {
-			tmp_best = prev_tmp;
-			prev_tmp = tmp;
-		}
-		if (tmp_best->type == PORT) {
-			if (synce_port_is_rx_dnu(tmp_best->port) ||
-			    synce_port_rx_ql_failed(tmp_best->port))
-				continue;
-			else
-				arr[i++] = tmp_best;
-		} else {
-			arr[i++] = tmp_best;
+			break;
 		}
 	}
-	if (prev_tmp) {
-		if (prev_tmp->type != PORT)
-			arr[i++] = prev_tmp;
-		else if (!synce_port_is_rx_dnu(prev_tmp->port) &&
-			 !synce_port_rx_ql_failed(prev_tmp->port))
-			arr[i++] = prev_tmp;
-	}
-	prio_count = i;
-	pr_debug("considered valid clock sources num: %d on %s", i, dev->name);
+
+	pr_debug("considered valid clock sources num: %d on %s",
+		 prio_count, dev->name);
 	/* invalidate obsolate sources */
-	LIST_FOREACH(tmp, &dev->clock_sources, list) {
-		for (i = 0; i < prio_count; i++)
-			if (tmp == arr[i])
-				break;
-		if (i == prio_count)
-			synce_clock_source_prio_clear(dev->dpll_mon, tmp);
+	for (i = 0; i < dev->num_clock_sources; i++) {
+		if (!all[i])
+			continue;
+		ret = synce_clock_source_prio_clear(dev->dpll_mon, all[i]);
+		if (ret)
+			goto free_out;
 	}
 	/* update priorities on valid sources */
 	for (i = 0; i < prio_count; i++) {
-		if (!synce_clock_source_prio_get(dev->dpll_mon, arr[i], &prio))
+		if (!prioritized[i])
+			break;
+		if (!synce_clock_source_prio_get(dev->dpll_mon, prioritized[i], &prio))
 			if ((int)prio == i)
 				continue;
-		synce_clock_source_prio_set(dev->dpll_mon, arr[i], i);
+		ret = synce_clock_source_prio_set(dev->dpll_mon,
+						  prioritized[i], i);
+		if (ret)
+			goto free_out;
 	}
-	free(arr);
 	dev->rebuild_prio = 0;
+	ret = 0;
+free_out:
+	free(all);
+	free(prioritized);
 
-	return 0;
+	return ret;
 }
 
 static int dev_step_dpll(struct synce_dev *dev)
