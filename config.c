@@ -44,6 +44,7 @@ enum config_section {
 	PORT_SECTION,
 	DEVICE_SECTION,
 	EXT_SECTION,
+	SRC_SECTION,
 	UNKNOWN_SECTION,
 };
 
@@ -91,6 +92,7 @@ struct config_item {
 #define PORT_TO_FLAG(_port) _port == PORT_SECTION ? CFG_ITEM_PORT : \
 	_port == DEVICE_SECTION ? CFG_ITEM_DEVICE : \
 	_port == EXT_SECTION ? CFG_ITEM_EXT : \
+	_port == SRC_SECTION ? CFG_ITEM_PORT | CFG_ITEM_EXT : \
 	CFG_ITEM_STATIC
 
 #define CONFIG_ITEM_DBL(_label, _port, _default, _min, _max) {	\
@@ -170,6 +172,9 @@ struct config_item {
 #define EXT_ITEM_STR(label, _default) \
 	CONFIG_ITEM_STRING(label, EXT_SECTION, _default)
 
+#define SRC_ITEM_INT(label, _default, min, max) \
+	CONFIG_ITEM_INT(label, SRC_SECTION, _default, min, max)
+
 struct config_item config_tab_synce[] = {
 	GLOB_ITEM_INT("logging_level", LOG_INFO, PRINT_LEVEL_MIN, PRINT_LEVEL_MAX),
 	GLOB_ITEM_STR("message_tag", NULL),
@@ -205,6 +210,7 @@ struct config_item config_tab_synce[] = {
 	EXT_ITEM_INT("input_ext_QL", 0, 0, 255),
 	EXT_ITEM_STR("external_enable_cmd", NULL),
 	EXT_ITEM_STR("external_disable_cmd", NULL),
+	SRC_ITEM_INT("internal_prio", 128, 0, 255),
 };
 
 static struct interface *__config_create_interface(const char *name, struct config *cfg,

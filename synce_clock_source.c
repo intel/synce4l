@@ -43,6 +43,7 @@ int synce_clock_source_add_source(struct synce_clock_source *clock_source,
 	}
 
 	clock_source->type = type;
+	clock_source->name = clock_source_name;
 	if (type == PORT) {
 		clock_source->port = synce_port_create(clock_source_name);
 		if (!clock_source->port)
@@ -56,21 +57,22 @@ int synce_clock_source_add_source(struct synce_clock_source *clock_source,
 	return 0;
 }
 
-int synce_clock_source_init(struct synce_clock_source *clock_source,
+int synce_clock_source_init(struct synce_clock_source *clksrc,
 			    struct config *cfg, int network_option,
 			    int is_extended, int recovery_time,
 			    struct dpll_mon *dpll_mon)
 {
-	if (!clock_source) {
+	if (!clksrc) {
 		pr_err("%s clock_source is NULL", __func__);
 		return -ENODEV;
 	}
+	clksrc->internal_prio = config_get_int(cfg, clksrc->name,
+					       "internal_prio");
 
-	if (clock_source->type == PORT)
-		return synce_port_init(clock_source->port, cfg,
-				       network_option, is_extended,
-				       recovery_time, dpll_mon);
-	return synce_ext_src_init(clock_source->ext_src, cfg,
+	if (clksrc->type == PORT)
+		return synce_port_init(clksrc->port, cfg, network_option,
+				       is_extended, recovery_time, dpll_mon);
+	return synce_ext_src_init(clksrc->ext_src, cfg,
 				  network_option, is_extended, dpll_mon);
 }
 
@@ -138,11 +140,11 @@ struct synce_clock_source
 	}
 
 	left_ql_priority = get_clock_source_priority_params(left,
-							   &left_priority_list,
-							   &left_priority_count);
+							    &left_priority_list,
+							    &left_priority_count);
 	right_ql_priority = get_clock_source_priority_params(right,
-							    &right_priority_list,
-							    &right_priority_count);
+							     &right_priority_list,
+							     &right_priority_count);
 
 	/* the left and right lists should be the same */
 	if (left_priority_list != right_priority_list ||
@@ -155,12 +157,14 @@ struct synce_clock_source
 	for (i = 0; i < left_priority_count; i++) {
 		if (left_priority_list[i] == left_ql_priority) {
 			best = left;
-			goto out;
 		}
 		if (left_priority_list[i] == right_ql_priority) {
+			if (best && left->internal_prio <= right->internal_prio)
+				goto out;
 			best = right;
-			goto out;
 		}
+		if (best)
+			goto out;
 	}
 
 	pr_debug("didn't found neither of QLs on priorities list");
