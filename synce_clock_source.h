@@ -27,6 +27,8 @@ struct synce_clock_source {
 		struct synce_ext_src *ext_src;
 		struct synce_port *port;
 	};
+	int internal_prio;
+	const char *name;
 };
 
 /**

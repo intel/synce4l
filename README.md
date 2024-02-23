@@ -168,6 +168,7 @@ communication.
 | `recover_clock_disable_cmd` | None    | string       | Shell command which disables PHY port pointed by this Port section as a source of frequency for the SyncE EEC on this device (required only in "internal_input" mode).            |
 | `allowed_qls`               | None    | string       | List of hex values containing allowed SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted.          |
 | `allowed_ext_qls`           | None    | string       | List of hex values containing allowed extended SSM QLs separated by comma (`,`), other received ones would be discarded - if parameter is not provided, all QLs will be accepted. |
+| `internal_prio`             | 128     | 0-255        | An internal source priority, higher priority (lower value) is used to select a source as better quality in case two sources are considered equal quality                          |
 
 > *Remark:* Please do not use backslashes in config file in 'string' fields - for example do not use it like this: `"/sys/kernel/debug/ice/0000\:5e\:00\.0/cgu_state"`
 
@@ -177,15 +178,16 @@ Any other section not starting with `{` (e.g. {SMA1}) is the external source sec
 Multiple external source sections are allowed. Each external source participates in
 best source selection algorithm for EEC
 
-| Parameter                   | Default | Valid values       | Description                                                                                                                                           |
-| --------------------------- | ------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `input_QL`                  | `0`     | `0-15`, `0x0-0xF`  | Quality Level (QL) for "external input" mode.                                                                                                         |
-| `input_ext_QL`              | `0`     | `0-255`,`0x0-0xFF` | Extended Quality Level for "external input" mode.                                                                                                     |
-| `external_enable_cmd`       | None    | string             | Shell command which enables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device.  |
-| `external_disable_cmd`      | None    | string             | Shell command which disables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device. |
-| `board_label`               | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                    |
-| `panel_label`               | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                    |
-| `package_label`             | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                    |
+| Parameter                   | Default | Valid values       | Description                                                                                                                                              |
+| --------------------------- | ------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input_QL`                  | `0`     | `0-15`, `0x0-0xF`  | Quality Level (QL) for "external input" mode.                                                                                                            |
+| `input_ext_QL`              | `0`     | `0-255`,`0x0-0xFF` | Extended Quality Level for "external input" mode.                                                                                                        |
+| `external_enable_cmd`       | None    | string             | Shell command which enables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device.     |
+| `external_disable_cmd`      | None    | string             | Shell command which disables external clock source pointed by this external source section as a source of frequency for the SyncE EEC on this device.    |
+| `board_label`               | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                       |
+| `panel_label`               | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                       |
+| `package_label`             | None    | string             | Used for Linux dpll subsystem based configuration. A label of a pin associated with the external EEC input in Linux dpll subsytem.                       |
+| `internal_prio`             | 128     | 0-255              | An internal source priority, higher priority (lower value) is used to select a source as better quality in case two sources are considered equal quality |
 
 > *Remark:* When dpll subsystem is used, a value of `board_label`, `panel_label` or `package_label` shall be provided, depending on a type of label that given input has registered in Linux dpll subsystem.
 
@@ -218,12 +220,14 @@ recover_clock_enable_cmd   echo 1 0 > /sys/class/net/eth0/device/phy/synce
 recover_clock_disable_cmd  echo 0 0 > /sys/class/net/eth0/device/phy/synce
 allowed_qls                0x2,0x4,0x8
 allowed_ext_qls            0x20,0x21
+internal_prio              1
 
 [{SMA1}]
 external_enable_cmd        echo 2 1 > /sys/class/net/enp1s0f0/device/ptp/ptp*/pins/SMA1
 external_disable_cmd       echo 0 1 > /sys/class/net/enp1s0f0/device/ptp/ptp*/pins/SMA1
 input_QL                   0x2
 input_ext_QL               0x20
+internal_prio              0
 
 ```
 
@@ -249,11 +253,13 @@ tx_heartbeat_msec          1000
 rx_heartbeat_msec          500
 allowed_qls                0x2,0x4,0x8
 allowed_ext_qls            0x20,0x21
+internal_prio              1
 
 [{SMA1}]
 board_label                SMA1
 input_QL                   0x2
 input_ext_QL               0x20
+internal_prio              0
 
 ```
 
