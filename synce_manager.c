@@ -326,7 +326,7 @@ return_response:
 			if (err_tlv->value)
 				free(err_tlv->value);
 			free((void *)err_tlv);
-		} else {
+		} else if (tlv_array) {
 			ret = synce_manager_generate_response(tlv_array,
 							      tlv_num,
 							      response,
@@ -334,7 +334,7 @@ return_response:
 		}
 
 		for (i = 0; i < tlv_num; i++) {
-			if (tlv_array[i].value)
+			if (tlv_array && tlv_array[i].value)
 				free(tlv_array[i].value);
 		}
 		if (tlv_array)
