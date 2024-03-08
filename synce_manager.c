@@ -40,7 +40,7 @@ static void synce_manager_generate_err_tlv(struct synce_manager_tlv **err_tlv,
 	memcpy((*err_tlv)->value, err_str, (*err_tlv)->length);
 }
 
-int synce_manager_parse_input(const uint8_t *input,
+int synce_manager_parse_input(const uint8_t *input, int bytes_read,
 			      struct synce_manager_tlv **tlv_array,
 			      int *tlv_num, char *dev_name,
 			      char *ext_src_name,
@@ -53,10 +53,10 @@ int synce_manager_parse_input(const uint8_t *input,
 	*tlv_num = 0;
 	*tlv_array = NULL;
 
-	while (index < MAX_COMMAND_SIZE) {
+	while (index < bytes_read) {
 		memset(&new_tlv, 0, sizeof(struct synce_manager_tlv));
 
-		if (index + 2 * sizeof(uint16_t) > MAX_COMMAND_SIZE) {
+		if (index + (int)(2 * sizeof(uint16_t)) > bytes_read) {
 			sprintf(err_response, "Command size exceeds %d",
 				MAX_COMMAND_SIZE);
 			synce_manager_generate_err_tlv(err_tlv, err_response);
@@ -70,14 +70,15 @@ int synce_manager_parse_input(const uint8_t *input,
 
 		new_tlv.length = *(uint16_t *)(input + index);
 		index += sizeof(uint16_t);
-		if (new_tlv.length + index > MAX_COMMAND_SIZE) {
+		if (new_tlv.length + index > bytes_read) {
 			sprintf(err_response, "Command size exceeds %d",
-				MAX_COMMAND_SIZE);
+				bytes_read);
 			synce_manager_generate_err_tlv(err_tlv, err_response);
 			return -1;
 		}
 
-		if (new_tlv.length > 0) {
+		if (new_tlv.length > 0 &&
+		    new_tlv.length <= bytes_read - index) {
 			new_tlv.value = malloc(new_tlv.length);
 			if (!new_tlv.value) {
 				synce_manager_generate_err_tlv(err_tlv, "Internal parsing error");
@@ -286,13 +287,17 @@ static void *synce_manager_server_thread(void *arg)
 
 		// Read the client's command
 		bytes_read = recv(new_socket, command, MAX_COMMAND_SIZE, 0);
-		if (bytes_read < 0) {
+		if (bytes_read <= 0) {
 			synce_manager_generate_err_tlv(&err_tlv, "NULL command");
 			goto return_response;
+		} else if (bytes_read > MAX_COMMAND_SIZE) {
+			synce_manager_generate_err_tlv(&err_tlv,
+						       "Command size exceeds MAX_COMMAND_SIZE");
+			goto return_response;
 		}
-		ret = synce_manager_parse_input(command, &tlv_array, &tlv_num,
-						dev_name, ext_src_name,
-						&err_tlv);
+		ret = synce_manager_parse_input(command, bytes_read, &tlv_array,
+						&tlv_num, dev_name,
+						ext_src_name, &err_tlv);
 		if (ret)
 			goto return_response;
 
