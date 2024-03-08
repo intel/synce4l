@@ -238,7 +238,7 @@ int synce_manager_generate_response(struct synce_manager_tlv *resp_tlv,
 static void *synce_manager_server_thread(void *arg)
 {
 	struct synce_clock *clk = (struct synce_clock *)arg;
-	int tlv_num, ret, i, resp_len, bytes_read;
+	int tlv_num = 0, ret, i, resp_len, bytes_read;
 	uint8_t response[MAX_RESPONSE_SIZE];
 	struct synce_manager_tlv *tlv_array;
 	struct synce_manager_tlv *err_tlv;
