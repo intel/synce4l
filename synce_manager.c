@@ -250,7 +250,7 @@ static void *synce_manager_server_thread(void *arg)
 	struct synce_dev *dev;
 
 	server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (server_fd == 0) {
+	if (server_fd <= 0) {
 		pr_err("%s Socket creation failed", __func__);
 		exit(EXIT_FAILURE);
 	}
