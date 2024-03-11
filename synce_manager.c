@@ -103,7 +103,7 @@ int synce_manager_parse_input(const uint8_t *input, int bytes_read,
 		(*tlv_array)[*tlv_num] = new_tlv;
 		(*tlv_num)++;
 		if (new_tlv.type == MSG_DEV_NAME) {
-			if (new_tlv.length < IF_NAMESIZE) {
+			if (new_tlv.length < IF_NAMESIZE && new_tlv.value) {
 				memcpy(dev_name, new_tlv.value, new_tlv.length);
 				dev_name[new_tlv.length] = '\0';
 			} else {
@@ -114,7 +114,7 @@ int synce_manager_parse_input(const uint8_t *input, int bytes_read,
 				return -1;
 			}
 		} else if (new_tlv.type == MSG_SRC_NAME) {
-			if (new_tlv.length < IF_NAMESIZE) {
+			if (new_tlv.length < IF_NAMESIZE && new_tlv.value) {
 				memcpy(ext_src_name, new_tlv.value,
 				       new_tlv.length);
 				ext_src_name[new_tlv.length] = '\0';
