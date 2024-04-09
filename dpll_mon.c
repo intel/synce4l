@@ -64,6 +64,7 @@ struct dpll_mon_pin {
 	int ready;
 	uint32_t parent_used_by;
 	int prio_valid;
+	int id_requested;
 
 	STAILQ_HEAD(parents_head, parent_pin) parents;
 };
@@ -196,9 +197,7 @@ static void dpll_mon_pin_id_update(struct dpll_mon *dm, struct nlattr **tb)
 	struct dpll_mon_pin *pin;
 
 	STAILQ_FOREACH(pin, &dm->pins, list) {
-		if (pin && !pin->ifname && pin->valid == PIN_VALID && !pin->ready &&
-		    (pin->board_label || pin->package_label ||
-		     pin->panel_label))
+		if (pin && pin->id_requested)
 			if (tb[DPLL_A_PIN_ID]) {
 				pin->id = nla_get_u32(tb[DPLL_A_PIN_ID]);
 				pin->ready = 1;
@@ -667,12 +666,14 @@ static int init_pins(struct dpll_mon *dm)
 	pr_debug("RT link dump requested");
 	STAILQ_FOREACH(pin, &dm->pins, list) {
 		if (!pin->ifname && pin->valid == PIN_VALID) {
+			pin->id_requested = 1;
 			ret = nl_dpll_pin_id_get(dm->dev_sk, &dm->dev_args,
 						 dm->family, dm->clock_id,
 						 dm->module_name,
 						 pin->board_label,
 						 pin->panel_label,
 						 pin->package_label, pin->type);
+			pin->id_requested = 0;
 			if (ret < 0) {
 				pr_debug_pin("get id failed", pin);
 				return ret;
