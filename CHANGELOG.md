@@ -1,6 +1,34 @@
 # Changelog
 This file will carry any notable changes made to `synce4l` project.
 
+## 1.1.0 - 24th May 2024
+* fix DPLL pin ID assignment with invalid input
+* fix new_tlv.value NULL dereference
+* fix uninitialized use of tlv_arr
+* fix uninitialized use of tlv_num
+* fix error handling on command recv
+* fix error handling on socket creation
+* add SECURITY.md
+* simplify rebuild of priorities
+* add internal device priority configuration
+* fix duplicated pin data
+* add dpll_mon serialized data updates
+* fix priority rebuild
+* fix pin parent handling
+* configurable synce_clock_poll delay
+* add list of dependencies to README.md
+* fix sync on missing extended tlv
+* clear pin priorities on exit
+* avoid disconnecting input when rebuilding priority
+* add functions for clearing priority of individual pins
+* update port TX QL when external source locks
+* change function to static in synce_manager
+* change d_state updating implementation
+* fix flows moving from best port to SMA
+* add external API for managing QL
+* avoid -Wmaybe-uninitialized warning
+* fix printf formats for 32-bit archs
+
 ## 1.0.0 - 2nd November 2023
 * add external sources section to configuration file
 * remove external/line input working modes of synce4l, with a new external
