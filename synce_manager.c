@@ -257,8 +257,8 @@ static void *synce_manager_server_thread(void *arg)
 	}
 
 	server.sun_family = AF_UNIX;
-	strncpy(server.sun_path, synce_clock_get_socket_path(clk),
-		sizeof(server.sun_path));
+	snprintf(server.sun_path, sizeof(server.sun_path), "%s",
+		 synce_clock_get_socket_path(clk));
 
 	if (bind(server_fd, (struct sockaddr *)&server, sizeof(server)) < 0) {
 		pr_err("%s Bind failed", __func__);
@@ -289,10 +289,12 @@ static void *synce_manager_server_thread(void *arg)
 		bytes_read = recv(new_socket, command, MAX_COMMAND_SIZE, 0);
 		if (bytes_read <= 0) {
 			synce_manager_generate_err_tlv(&err_tlv, "NULL command");
+			ret = -1;
 			goto return_response;
 		} else if (bytes_read > MAX_COMMAND_SIZE) {
 			synce_manager_generate_err_tlv(&err_tlv,
 						       "Command size exceeds MAX_COMMAND_SIZE");
+			ret = -1;
 			goto return_response;
 		}
 		ret = synce_manager_parse_input(command, bytes_read, &tlv_array,
@@ -340,8 +342,8 @@ return_response:
 		if (tlv_array)
 			free((void *)tlv_array);
 
-		if (!ret)
-			write(new_socket, response, resp_len);
+		if (!ret && write(new_socket, response, resp_len) != resp_len)
+			ret = -1;
 		close(new_socket);
 	}
 
