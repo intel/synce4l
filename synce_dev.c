@@ -579,7 +579,7 @@ static bool source_invalid(struct synce_clock_source *c)
 int rebuild_inputs_prio(struct synce_dev *dev)
 {
 	struct synce_clock_source *c, *best_c, **all, **prioritized;
-	int i = 0, prio_count = 0, j, best_c_idx, ret;
+	int i = 0, prio_count = 0, j, best_c_idx = 0, ret;
 	uint32_t prio;
 
 	all = calloc(dev->num_clock_sources, sizeof(*all));
