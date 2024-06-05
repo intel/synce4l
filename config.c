@@ -180,7 +180,7 @@ struct config_item config_tab_synce[] = {
 	GLOB_ITEM_STR("message_tag", NULL),
 	GLOB_ITEM_INT("poll_interval_msec", 20, CLOCK_POLL_INTERVAL_MIN,
 		      CLOCK_POLL_INTERVAL_MAX),
-	GLOB_ITEM_STR("smc_socket_path", "/tmp/synce4l_socket"),
+	GLOB_ITEM_STR("smc_socket_path", "/run/synce4l_socket"),
 	GLOB_ITEM_INT("use_syslog", 1, 0, 1),
 	GLOB_ITEM_STR("userDescription", ""),
 	GLOB_ITEM_INT("verbose", 0, 0, 1),
