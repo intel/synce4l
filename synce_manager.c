@@ -264,6 +264,8 @@ static void *synce_manager_server_thread(void *arg)
 	snprintf(server.sun_path, sizeof(server.sun_path), "%s",
 		 synce_clock_get_socket_path(clk));
 
+	unlink(server.sun_path);
+
 	if (bind(server_fd, (struct sockaddr *)&server, sizeof(server)) < 0) {
 		pr_err("%s Bind failed", __func__);
 		exit(EXIT_FAILURE);
