@@ -256,6 +256,10 @@ static void *synce_manager_server_thread(void *arg)
 		exit(EXIT_FAILURE);
 	}
 
+	if (strlen(synce_clock_get_socket_path(clk)) >= sizeof(server.sun_path)) {
+		pr_err("%s smc_socket_path is too long", __func__);
+		exit(EXIT_FAILURE);
+	}
 	server.sun_family = AF_UNIX;
 	snprintf(server.sun_path, sizeof(server.sun_path), "%s",
 		 synce_clock_get_socket_path(clk));
