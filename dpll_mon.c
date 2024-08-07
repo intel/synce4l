@@ -240,6 +240,7 @@ static struct dpll_mon_pin *pin_create(void)
 	}
 	pr_debug("%s %p", __func__, pin);
 	pin->parent_used_by = PARENT_NOT_USED;
+	pin->id = -1;
 	STAILQ_INIT(&pin->parents);
 
 	return pin;
