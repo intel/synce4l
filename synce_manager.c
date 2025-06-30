@@ -97,6 +97,7 @@ int synce_manager_parse_input(const uint8_t *input, int bytes_read,
 		if (!*tlv_array) {
 			synce_manager_generate_err_tlv(err_tlv, "Internal parsing error");
 			pr_err("%s Failed reallocating memory", __func__);
+			free(new_tlv.value);
 			return -1;
 		}
 
