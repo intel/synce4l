@@ -1,6 +1,18 @@
 # Changelog
 This file will carry any notable changes made to `synce4l` project.
 
+## 1.1.1 - 1st July 2025
+* fix possible resource leak
+* fix requested thread stack size
+* fix scorecard.yml
+* initialize pin ID to -1
+* fix crash in dpll_rt_recv()
+* create scorecard.yml
+* unlink smc_socket_path before binding
+* check smc_socket_path length
+* change default smc_socket_path to /run/synce4l_socket
+* fix more compiler warnings
+
 ## 1.1.0 - 24th May 2024
 * fix DPLL pin ID assignment with invalid input
 * fix new_tlv.value NULL dereference
