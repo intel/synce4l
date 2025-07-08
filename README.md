@@ -1,3 +1,7 @@
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/intel/synce4l/badge)](https://scorecard.dev/viewer/?uri=github.com/intel/synce4l)
+
+---
+
 # Table of contents
 
 1. Introduction
