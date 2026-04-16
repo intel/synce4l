@@ -1,0 +1,757 @@
+#
+# This workflow scans for the latest BDBA security scans and uploads results to SDL-E.
+# It runs every Sunday at 11 PM UTC and can also be triggered manually.
+#
+# Repository: intel/synce4l. COMPONENT_MAPPINGS must list only this product.
+# Each JSON key must match the BDBA app search tag (see BDBA q=file:... queries),
+# typically aligned with how this component is registered in BDBA.
+#
+# Required secrets:
+# - BDBA_TOKEN: API token from BDBA for accessing scan results
+# - SDLE_TOKEN: API token for uploading evidence to SDL-E
+# - SDLE_USER: Username associated with the SDLE_TOKEN
+#
+# The workflow will block uploads if BDBA finds vulnerabilities (verdict = "Vulns").
+#
+# To prevent upload to SDL-E, select "test_mode" when triggering the job.
+#
+# Before first run: add one or more SDL-E numeric project IDs for Tools-synce4l below.
+# If the array is empty, the "Validate Access" step cannot probe SDL-E and will fail.
+#
+
+name: SDLE BDBA upload (synce4l)
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+
+  # BDBA component name -> SDL-E project ID(s)
+  COMPONENT_MAPPINGS: |
+    {
+      "Tools-synce4l": [7822]
+    }
+  # the URL to BDBA (to download scans)
+  BDBA_URL: 'https://bdba001.icloud.intel.com'
+  
+  #
+  # Required repository secrets:
+  #
+  #     secrets.BDBA_TOKEN      -- created from https://bdba001.icloud.intel.com/#/users/me/authentication
+  #
+  #     secrets.SDLE_TOKEN       -- generated from https://sdl-e.app.intel.com/profile
+  #     secrets.SDLE_USER        -- the user with generated the secrets.SDLE_TOKEN
+  #
+  
+  BDBA_TOKEN: ${{ secrets.BDBA_TOKEN }}
+  SDLE_TOKEN: ${{ secrets.SDLE_TOKEN }}
+  SDLE_USER: ${{ secrets.SDLE_USER }}
+  RUN_TMP_DIR: /tmp/bdba-${{ github.run_id }}-${{ github.run_attempt }}
+
+  # SDL-E task ID for BDBA evidence (update if your SDL-E project uses another task)
+  SDLE_BDBA_TASKID: 'SDL441'
+  
+  # defaults for debug
+  PROJECT_NAME: ${{ github.event.inputs.project_name || 'ALL' }}
+  DAYS_BACK: ${{ github.event.inputs.days_back || '7' }}
+  DRY_RUN: ${{ github.event.inputs.test_mode || 'false' }}
+  
+on:
+    
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Component name to search for'
+        required: true
+        default: 'ALL'
+        type: choice
+        options:
+          - 'ALL'
+          - 'Tools-synce4l'
+      days_back:
+        description: 'Days to look back for scans'
+        required: true
+        default: '7'
+        type: string
+      test_mode:
+        description: 'Run in test mode (dry run - no evidence submitted)'
+        required: false
+        default: 'false'
+        type: boolean
+
+  # Add scheduled trigger - Sunday at 11 PM UTC
+  schedule:
+    - cron: '0 23 * * 0'
+jobs:
+  sdle-bdba-scan:
+    name: BDBA scan and SDL-E upload
+    runs-on: innersource.prod.amr.dind
+    timeout-minutes: 30
+    concurrency:
+      group: bdba-${{ github.workflow }}-${{ github.ref_name }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - name: Validate Access
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUN_TMP_DIR"
+        echo ""
+        echo "[INFO] Testing required secrets ..."
+        echo ""
+        echo "  BDBA_TOKEN is set: ${{ secrets.BDBA_TOKEN != '' }}"
+        echo "  SDLE_TOKEN is set: ${{ secrets.SDLE_TOKEN != '' }}"
+        echo "  SDLE_USER is set: ${{ secrets.SDLE_USER != '' }}"
+        
+        validate_failed=0
+        
+        if [ -z "${{ secrets.BDBA_TOKEN }}" ]; then
+          echo "  [ERROR] BDBA_TOKEN secret is empty or not set"
+          validate_failed=1
+        fi
+        if [ -z "${{ secrets.SDLE_TOKEN }}" ]; then
+          echo "  [ERROR] SDLE_TOKEN secret is empty or not set"
+          validate_failed=1
+        fi
+        if [ -z "${{ secrets.SDLE_USER }}" ]; then
+          echo "  [ERROR] SDLE_USER secret is empty or not set"
+          validate_failed=1
+        fi        
+
+        echo ""
+        echo "[INFO] Validating days_back input..."
+        echo ""
+
+        if ! [[ "$DAYS_BACK" =~ ^[0-9]+$ ]]; then
+          echo "  [ERROR] DAYS_BACK must be an integer (received: '$DAYS_BACK')"
+          validate_failed=1
+        elif [ "$DAYS_BACK" -lt 1 ] || [ "$DAYS_BACK" -gt 365 ]; then
+          echo "  [ERROR] DAYS_BACK must be between 1 and 365 (received: '$DAYS_BACK')"
+          validate_failed=1
+        else
+          echo "  [OK] DAYS_BACK value is valid: $DAYS_BACK"
+        fi
+
+        echo ""
+        echo "[INFO] Validating COMPONENT_MAPPINGS..."
+        echo ""
+
+        mappings_json='${{ env.COMPONENT_MAPPINGS }}'
+
+        if ! echo "$mappings_json" | jq -e 'type == "object"' > /dev/null; then
+          echo "  [ERROR] COMPONENT_MAPPINGS must be valid JSON object"
+          validate_failed=1
+        else
+          mapping_count=$(echo "$mappings_json" | jq -r 'keys | length')
+          if [ "$mapping_count" -eq 0 ]; then
+            echo "  [ERROR] COMPONENT_MAPPINGS must contain at least one component mapping"
+            validate_failed=1
+          fi
+
+          invalid_components=$(echo "$mappings_json" | jq -r '
+            to_entries[]
+            | select(
+                (.value | type) != "array"
+                or (.value | length) == 0
+                or any(.value[]; (type != "number") or (. != floor))
+              )
+            | .key
+          ')
+
+          if [ -n "$invalid_components" ]; then
+            echo "  [ERROR] Invalid mapping(s) found. Each component must map to a non-empty array of numeric SDL-E IDs:"
+            echo "$invalid_components" | sed 's/^/    - /'
+            validate_failed=1
+          else
+            echo "  [OK] COMPONENT_MAPPINGS format is valid"
+          fi
+        fi
+        
+        echo ""
+        echo "[INFO] Testing SDL-E API access..."
+        echo ""
+        
+        # Get the first project ID from COMPONENT_MAPPINGS
+        first_project_id=$(echo '${{ env.COMPONENT_MAPPINGS }}' | jq -r '[.[] | .[]] | .[0]')
+          
+        if [ -z "$first_project_id" ] || [ "$first_project_id" = "null" ]; then
+          echo "  [ERROR] Could not extract first project ID from COMPONENT_MAPPINGS"
+          validate_failed=1
+        else
+          echo "  Using first project ID from mappings: $first_project_id"
+            
+          upload_response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+              -H "ApiKey: $SDLE_TOKEN" \
+              -X GET \
+              "https://sdl-e.app.intel.com/uploader/v1/evidence/uploads/documents/creators/$SDLE_USER?projectId=$first_project_id&taskId=$SDLE_BDBA_TASKID")
+            
+          upload_http_code=$(echo "$upload_response" | sed -n 's/.*HTTPSTATUS:\([0-9][0-9]*\)$/\1/p')
+
+          if [ -z "$upload_http_code" ]; then
+            echo "  [ERROR] Could not parse SDL-E API HTTP status from response"
+            validate_failed=1
+          else
+            echo "  SDL-E API response status: $upload_http_code"
+            if [ "$upload_http_code" -eq 401 ] || [ "$upload_http_code" -eq 403 ]; then
+              echo "  [ERROR] SDL-E authentication/authorization failed (HTTP $upload_http_code)"
+              validate_failed=1
+            elif [ "$upload_http_code" -ge 500 ]; then
+              echo "  [ERROR] SDL-E service error (HTTP $upload_http_code)"
+              validate_failed=1
+            else
+              echo "  [OK] SDL-E endpoint reachable and token accepted for request context"
+            fi
+          fi
+        fi
+        
+        echo ""
+        echo "[INFO] Testing BDBA API connection..."
+        echo ""
+        
+        HTTP_CODE=$(curl -s -o "$RUN_TMP_DIR/api_response.json" -w "%{http_code}" \
+          -X GET \
+          -H "Authorization: Bearer ${BDBA_TOKEN}" \
+          -H "Accept: application/json" \
+          "${BDBA_URL}/api/apps/")
+        
+        echo "  API Response Status: $HTTP_CODE"
+        
+        if [ "$HTTP_CODE" -ge 400 ]; then
+          echo "  [ERROR] API authentication failed"
+          validate_failed=1
+        else
+          echo "  [OK] API connection successful"
+        fi
+        
+        # Exit early if any validate_failed
+        if [ "$validate_failed" -eq 1 ]; then
+          echo ""
+          echo "[ERROR] One or more required validations failed. Cannot proceed."
+          exit 1
+        fi
+    - name: Resolve Components and SDL-E Projects
+      id: resolve_projects
+      run: |
+        set -euo pipefail
+        echo "Resolving components and SDL-E Project IDs for: $PROJECT_NAME"
+        
+        if [ "$PROJECT_NAME" = "ALL" ]; then
+          echo "[INFO] Processing ALL components"
+          
+          # Get all component names
+          components=$(echo '${{ env.COMPONENT_MAPPINGS }}' | jq -r 'keys[]')
+          component_count=$(echo '${{ env.COMPONENT_MAPPINGS }}' | jq -r 'keys | length')
+          
+          # Get all unique project IDs across all components
+          all_project_ids=$(echo '${{ env.COMPONENT_MAPPINGS }}' | jq -r '[.[] | .[]] | unique | @json')
+          all_project_list=$(echo "$all_project_ids" | jq -r '.[]' | tr '\n' ' ')
+          total_projects=$(echo "$all_project_ids" | jq -r 'length')
+          
+          echo "[OK] Found $component_count components with $total_projects unique SDL-E projects"
+          echo "Components: $(echo "$components" | tr '\n' ' ')"
+          echo "All Project IDs: $all_project_list"
+          
+          echo "processing_mode=ALL" >> $GITHUB_OUTPUT
+          echo "components=$(echo "$components" | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+          echo "component_count=$component_count" >> $GITHUB_OUTPUT
+          echo "all_project_ids=$all_project_ids" >> $GITHUB_OUTPUT
+          echo "all_project_list=$all_project_list" >> $GITHUB_OUTPUT
+          echo "total_projects=$total_projects" >> $GITHUB_OUTPUT
+          
+        else
+          echo "[INFO] Processing single component: $PROJECT_NAME"
+          
+          # Parse the JSON mapping and extract the project IDs array for single component
+          project_ids=$(echo '${{ env.COMPONENT_MAPPINGS }}' | jq -r --arg project "$PROJECT_NAME" '.[$project] // empty | @json')
+          
+          if [ -z "$project_ids" ] || [ "$project_ids" = "null" ]; then
+            echo "[ERROR] No SDL-E project mapping found for: $PROJECT_NAME"
+            echo "Available projects:"
+            echo '${{ env.COMPONENT_MAPPINGS }}' | jq -r 'keys[]'
+            exit 1
+          fi
+          
+          project_list=$(echo "$project_ids" | jq -r '.[]' | tr '\n' ' ')
+          project_count=$(echo "$project_ids" | jq -r 'length')
+          
+          echo "[OK] Found $project_count SDL-E Project ID(s) for $PROJECT_NAME: $project_list"
+          
+          echo "processing_mode=SINGLE" >> $GITHUB_OUTPUT
+          echo "components=[\"$PROJECT_NAME\"]" >> $GITHUB_OUTPUT
+          echo "component_count=1" >> $GITHUB_OUTPUT
+          echo "all_project_ids=$project_ids" >> $GITHUB_OUTPUT
+          echo "all_project_list=$project_list" >> $GITHUB_OUTPUT
+          echo "total_projects=$project_count" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Debug Parameters
+      run: |
+        set -euo pipefail
+        echo "Event name: ${{ github.event_name }}"
+        echo "PROJECT_NAME: $PROJECT_NAME"
+        echo "DAYS_BACK: $DAYS_BACK"
+        echo "DRY_RUN=$DRY_RUN" 
+        echo "Processing Mode: ${{ steps.resolve_projects.outputs.processing_mode }}"
+        echo "Components to process: ${{ steps.resolve_projects.outputs.component_count }}"
+        echo "Total SDL-E Projects: ${{ steps.resolve_projects.outputs.total_projects }}"
+        echo "All Project IDs: ${{ steps.resolve_projects.outputs.all_project_list }}"
+    - name: Search for Recent Scans
+      id: search_scans
+      run: |
+        set -euo pipefail
+        mkdir -p scan_results
+        
+        current_time=$(date +%s)
+        days_back_seconds=$(($DAYS_BACK * 24 * 60 * 60))
+        cutoff_timestamp=$((current_time - days_back_seconds))
+        
+        processing_mode="${{ steps.resolve_projects.outputs.processing_mode }}"
+        components='${{ steps.resolve_projects.outputs.components }}'
+        
+        echo "Processing Mode: $processing_mode"
+        echo "Looking for scans newer than timestamp: $cutoff_timestamp"
+        
+        # Process each component
+        echo "$components" | jq -r '.[]' | while read -r component; do
+          component_safe=$(echo "$component" | sed 's/[^A-Za-z0-9._-]/_/g')
+          echo ""
+          echo "[INFO] Searching for component: $component"
+          
+          encoded_query=$(printf 'file:%s' "$component" | jq -sRr @uri)
+          search_url="$BDBA_URL/api/apps/?q=$encoded_query&timestamp=$cutoff_timestamp"
+          echo "Search URL: $search_url"
+          
+          response=$(curl -s -w "%{http_code}" \
+            -H "Authorization: Bearer $BDBA_TOKEN" \
+            -H "Accept: application/json" \
+            "$search_url" \
+            -o "$RUN_TMP_DIR/search_response_${component_safe}.json")
+          
+          echo "Search response status for $component: $response"
+          
+          if [ "$response" -ge 400 ]; then
+            echo "[ERROR] Search failed for $component:"
+            echo "[ERROR] BDBA search request failed (HTTP $response)"
+            continue
+          fi
+          
+          scan_count=$(jq '.products | length' "$RUN_TMP_DIR/search_response_${component_safe}.json")
+          echo "Found $scan_count scans for $component"
+          
+          if [ "$scan_count" -gt 0 ]; then
+            # Get the most recent scan for this component
+            jq -r '.products | sort_by(.updated) | reverse | .[0] | "\(.product_id)|\(.name)|\(.updated)"' "$RUN_TMP_DIR/search_response_${component_safe}.json" > "$RUN_TMP_DIR/latest_scan_${component_safe}.txt"
+            
+            latest_scan=$(cat "$RUN_TMP_DIR/latest_scan_${component_safe}.txt")
+            product_id=$(echo "$latest_scan" | cut -d'|' -f1)
+            scan_name=$(echo "$latest_scan" | cut -d'|' -f2)
+            updated=$(echo "$latest_scan" | cut -d'|' -f3)
+            
+            echo "[OK] Latest scan for $component: $scan_name (ID: $product_id) - Updated: $updated"
+            
+            # Store scan info for this component
+            echo "$component|$product_id|$scan_name|$updated" >> "$RUN_TMP_DIR/all_scans.txt"
+          else
+            echo "[WARN] No recent scans found for $component"
+          fi
+        done
+        
+        # Check if we found any scans
+        if [ -f "$RUN_TMP_DIR/all_scans.txt" ]; then
+          scan_count=$(wc -l < "$RUN_TMP_DIR/all_scans.txt")
+          echo ""
+          echo "[INFO] Summary: Found scans for $scan_count components"
+          cat "$RUN_TMP_DIR/all_scans.txt"
+          
+          echo "has_scans=true" >> $GITHUB_OUTPUT
+          echo "total_scans=$scan_count" >> $GITHUB_OUTPUT
+        else
+          echo ""
+          echo "[ERROR] No recent scans found for any components in the last $DAYS_BACK days"
+          echo "has_scans=false" >> $GITHUB_OUTPUT
+          echo "total_scans=0" >> $GITHUB_OUTPUT
+        fi
+    - name: Download Scan Results
+      if: steps.search_scans.outputs.has_scans == 'true'
+      id: download_results
+      run: |
+        set -euo pipefail
+        echo "Downloading scan results for all found components..."
+        
+        successful_downloads=0
+        failed_downloads=0
+        
+        while IFS='|' read -r component product_id scan_name updated; do
+          component_safe=$(echo "$component" | sed 's/[^A-Za-z0-9._-]/_/g')
+          echo ""
+          echo "[INFO] Downloading results for $component (Product ID: $product_id)"
+          
+          # Create component-specific directory
+          mkdir -p "scan_results/$component_safe"
+          
+          # Download PDF report
+          echo "Downloading PDF report for $component..."
+          clean_name=$(echo "$scan_name" | sed 's/[^a-zA-Z0-9._-]/_/g')
+          pdf_filename="${clean_name}_${product_id}.pdf"
+          
+          pdf_response=$(curl -s -w "%{http_code}" \
+            -H "Authorization: Bearer $BDBA_TOKEN" \
+            -H "Accept: application/pdf" \
+            "$BDBA_URL/api/product/$product_id/pdf-report" \
+            -o "scan_results/$component_safe/$pdf_filename")
+          
+          if [ "$pdf_response" -eq 200 ]; then
+            echo "  [OK] Downloaded PDF: $pdf_filename"
+            echo "$component|$pdf_filename|$product_id|$scan_name" >> "$RUN_TMP_DIR/successful_downloads.txt"
+            successful_downloads=$((successful_downloads + 1))
+          elif [ "$pdf_response" -eq 202 ]; then
+            echo "  [WARN] PDF report is still being generated for $component"
+            echo "$component|GENERATING|$product_id|$scan_name" >> "$RUN_TMP_DIR/failed_downloads.txt"
+            failed_downloads=$((failed_downloads + 1))
+          else
+            echo "  [ERROR] Failed to download PDF for $component: HTTP $pdf_response"
+            echo "$component|FAILED|$product_id|$scan_name" >> "$RUN_TMP_DIR/failed_downloads.txt"
+            failed_downloads=$((failed_downloads + 1))
+          fi
+          
+          # Download CSV reports
+          echo "  Downloading vulnerability CSV for $component..."
+          curl -s -H "Authorization: Bearer $BDBA_TOKEN" \
+            -H "Accept: text/csv" \
+            "$BDBA_URL/api/product/$product_id/csv-vulns" \
+            -o "scan_results/$component_safe/vulnerabilities.csv" || echo "    Could not download vulnerabilities CSV"
+          
+          echo "  Downloading components CSV for $component..."
+          curl -s -H "Authorization: Bearer $BDBA_TOKEN" \
+            -H "Accept: text/csv" \
+            "$BDBA_URL/api/product/$product_id/csv-libs" \
+            -o "scan_results/$component_safe/components.csv" || echo "    Could not download components CSV"
+          
+        done < "$RUN_TMP_DIR/all_scans.txt"
+        
+        echo ""
+        echo "[INFO] Download summary:"
+        echo "  [OK] Successful downloads: $successful_downloads"
+        if [ "$failed_downloads" -ne 0 ]; then
+            echo "  [ERROR] Failed downloads: $failed_downloads"
+        fi
+        
+        echo "successful_downloads=$successful_downloads" >> $GITHUB_OUTPUT
+        echo "failed_downloads=$failed_downloads" >> $GITHUB_OUTPUT
+        
+        if [ "$successful_downloads" -eq 0 ]; then
+          echo "[ERROR] No successful downloads - cannot proceed with uploads"
+          exit 1
+        fi
+    - name: Analyze Scan Results for Quality Gates
+      if: steps.search_scans.outputs.has_scans == 'true' && steps.download_results.outputs.successful_downloads != '0'
+      id: analyze_results
+      run: |
+        set -euo pipefail
+        echo "Analyzing all scan results using BDBA REST API to determine upload eligibility..."
+        
+        components_to_upload_json='[]'
+        components_to_skip_json='[]'
+        total_eligible=0
+        total_blocked=0
+        
+        if [ -f "$RUN_TMP_DIR/successful_downloads.txt" ]; then
+          while IFS='|' read -r component pdf_filename product_id scan_name; do
+            echo ""
+            echo "[INFO] Analyzing $component (Product ID: $product_id)..."
+            
+            # Initialize flags
+            should_block=false
+            block_reasons=""
+            
+            # Get detailed product analysis results via BDBA API
+            echo "  [INFO] Fetching analysis results from BDBA API..."
+            analysis_response=$(curl -s -w "%{http_code}" \
+              -H "Authorization: Bearer $BDBA_TOKEN" \
+              -H "Accept: application/json" \
+              "$BDBA_URL/api/product/$product_id/" \
+              -o "$RUN_TMP_DIR/analysis_${product_id}.json")
+            
+            if [ "$analysis_response" -ge 400 ]; then
+              echo "  [ERROR] Failed to fetch analysis results (HTTP $analysis_response)"
+              should_block=true
+              block_reasons="$block_reasons API: Failed to fetch analysis results;"
+            else
+              echo "  [OK] Analysis results retrieved successfully"
+              
+              # Parse the analysis response for overall verdict only
+              if [ -f "$RUN_TMP_DIR/analysis_${product_id}.json" ]; then
+                # Check overall verdict
+                overall_verdict=$(jq -r '.results.summary.verdict.short // "unknown"' "$RUN_TMP_DIR/analysis_${product_id}.json")
+                detailed_verdict=$(jq -r '.results.summary.verdict.detailed // "unknown"' "$RUN_TMP_DIR/analysis_${product_id}.json")
+                echo "    Overall Verdict: $overall_verdict - $detailed_verdict"
+                
+                # Block only if verdict indicates vulnerabilities
+                if [ "$overall_verdict" = "Vulns" ]; then
+                  should_block=true
+                  block_reasons="$block_reasons API: Overall verdict indicates vulnerabilities found;"
+                fi
+                
+                # Check scan status to ensure analysis is complete
+                scan_status=$(jq -r '.results.status // "unknown"' "$RUN_TMP_DIR/analysis_${product_id}.json")
+                echo "    Scan Status: $scan_status"
+                
+                if [ "$scan_status" = "F" ]; then
+                  should_block=true
+                  block_reasons="$block_reasons API: Scan failed;"
+                elif [ "$scan_status" = "B" ]; then
+                  should_block=true
+                  block_reasons="$block_reasons API: Scan still in progress;"
+                fi
+              fi
+            fi
+            
+            # Make blocking decision
+            if [ "$should_block" = true ]; then
+              echo "  [ERROR] BLOCKING upload - Reasons: $block_reasons"
+              components_to_skip_json=$(echo "$components_to_skip_json" | jq -c --arg component "$component" '. + [$component]')
+              total_blocked=$((total_blocked + 1))
+            else
+              echo "  [OK] ALLOWING upload - Overall verdict: $overall_verdict"
+              components_to_upload_json=$(echo "$components_to_upload_json" | jq -c --arg component "$component" '. + [$component]')
+              total_eligible=$((total_eligible + 1))
+            fi            
+          
+          done < "$RUN_TMP_DIR/successful_downloads.txt"
+        fi
+        
+        echo ""
+        echo "[INFO] Analysis summary (via BDBA REST API):"
+        echo "  [OK] Components eligible for upload: $total_eligible"
+        if [ "$total_blocked" -gt 0 ]; then
+            echo "  [ERROR] Components blocked from upload: $total_blocked"
+        else
+            echo "     Components blocked from upload: $total_blocked"
+        fi
+        
+        if [ "$total_eligible" -gt 0 ]; then
+          echo "  Eligible components: $(echo "$components_to_upload_json" | jq -r '.[]' | tr '\n' ' ')"
+          echo "should_upload=true" >> $GITHUB_OUTPUT
+          echo "eligible_count=$total_eligible" >> $GITHUB_OUTPUT
+        else
+          echo "  No components eligible for upload"
+          echo "should_upload=false" >> $GITHUB_OUTPUT
+          echo "eligible_count=0" >> $GITHUB_OUTPUT
+        fi
+        echo "components_to_upload_json=$components_to_upload_json" >> $GITHUB_OUTPUT
+        
+        if [ "$total_blocked" -gt 0 ]; then
+          echo "  Blocked components: $(echo "$components_to_skip_json" | jq -r '.[]' | tr '\n' ' ')"
+          echo "blocked_count=$total_blocked" >> $GITHUB_OUTPUT
+        else
+          echo "blocked_count=0" >> $GITHUB_OUTPUT
+        fi
+        echo "components_to_skip_json=$components_to_skip_json" >> $GITHUB_OUTPUT
+    - name: Upload BDBA Evidence to SDL-E
+      if: |
+        steps.search_scans.outputs.has_scans == 'true' && 
+        steps.download_results.outputs.successful_downloads != '0' && 
+        steps.analyze_results.outputs.should_upload == 'true' &&
+        github.event.inputs.test_mode != 'true'
+      run: |
+        set -euo pipefail
+        echo "Uploading BDBA reports to SDL-E for all eligible components..."
+        
+        components_to_upload_json='${{ steps.analyze_results.outputs.components_to_upload_json }}'
+        mappings='${{ env.COMPONENT_MAPPINGS }}'
+        
+        total_uploads=0
+        successful_uploads=0
+        failed_uploads=0
+        
+        while IFS= read -r component; do
+          component_safe=$(echo "$component" | sed 's/[^A-Za-z0-9._-]/_/g')
+          echo ""
+          echo "[INFO] Processing uploads for component: $component"
+          
+          # Get the PDF filename and scan details for this component
+          component_info=$(awk -F'|' -v c="$component" '$1==c{print; exit}' "$RUN_TMP_DIR/successful_downloads.txt")
+          if [ -z "$component_info" ]; then
+            echo "  [ERROR] Could not find download metadata for component: $component"
+            continue
+          fi
+          pdf_filename=$(echo "$component_info" | cut -d'|' -f2)
+          product_id=$(echo "$component_info" | cut -d'|' -f3)
+          scan_name=$(echo "$component_info" | cut -d'|' -f4)
+          
+          pdf_file="scan_results/$component_safe/$pdf_filename"
+          
+          if [ ! -f "$pdf_file" ]; then
+            echo "  [ERROR] PDF file not found: $pdf_file"
+            continue
+          fi
+          
+          # Get SDL-E project IDs for this component
+          project_ids=$(echo "$mappings" | jq -r --arg comp "$component" '.[$comp] // empty | @json')
+          
+          if [ -z "$project_ids" ] || [ "$project_ids" = "null" ]; then
+            echo "  [ERROR] No SDL-E project mapping found for $component"
+            continue
+          fi
+          
+          echo "  [INFO] Uploading to projects: $(echo "$project_ids" | jq -r '.[]' | tr '\n' ' ')"
+          
+          # Upload to each project for this component
+          echo "$project_ids" | jq -r '.[]' | while read -r project_id; do
+            echo "    [INFO] Uploading to SDL-E Project ID: $project_id"
+            
+            upload_response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+              -H "ApiKey: $SDLE_TOKEN" \
+              -F "file=@$pdf_file" \
+              "https://sdl-e.app.intel.com/uploader/v1/evidence/uploads/documents/creators/$SDLE_USER?projectId=$project_id&taskId=$SDLE_BDBA_TASKID&label=BDBA-Report-$component")
+            
+            http_code=$(echo "$upload_response" | sed -n 's/.*HTTPSTATUS:\([0-9][0-9]*\)$/\1/p')
+
+            if [ -z "$http_code" ]; then
+              echo "      [ERROR] Could not parse upload HTTP status for $component -> Project $project_id"
+              echo "$component|$project_id|FAILED|$pdf_filename" >> "$RUN_TMP_DIR/upload_results.txt"
+            elif [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+              echo "      [OK] SUCCESS - Evidence uploaded to $component (ProjectId: $project_id), TaskId=$SDLE_BDBA_TASKID"
+              echo "$component|$project_id|SUCCESS|$pdf_filename" >> "$RUN_TMP_DIR/upload_results.txt"
+            else
+              echo "      [ERROR] FAILED - $component -> Project $project_id (HTTP $http_code)"
+              echo "$component|$project_id|FAILED|$pdf_filename" >> "$RUN_TMP_DIR/upload_results.txt"
+            fi
+          done
+        done < <(echo "$components_to_upload_json" | jq -r '.[]')
+        
+        # Count results
+        if [ -f "$RUN_TMP_DIR/upload_results.txt" ]; then
+          total_uploads=$(wc -l < "$RUN_TMP_DIR/upload_results.txt")
+          successful_uploads=$(awk -F'|' '$3=="SUCCESS"{count++} END {print count+0}' "$RUN_TMP_DIR/upload_results.txt")
+          failed_uploads=$(awk -F'|' '$3=="FAILED"{count++} END {print count+0}' "$RUN_TMP_DIR/upload_results.txt")
+        fi
+        
+        echo ""
+        echo "[INFO] Final upload summary:"
+        echo "  [INFO] Total upload attempts: $total_uploads"
+        echo "  [OK] Successful uploads: $successful_uploads"
+        if [ "$failed_uploads" -ne 0 ]; then                   
+            echo "  [ERROR] Failed uploads: $failed_uploads"
+        fi
+        
+        if [ "$successful_uploads" -eq 0 ] && [ "$total_uploads" -gt 0 ]; then
+          echo "[ERROR] All uploads failed"
+          exit 1
+        elif [ "$successful_uploads" -gt 0 ]; then
+          echo "[OK] At least one upload succeeded"
+        fi
+        
+    - name: Generate Comprehensive Summary Report
+      if: steps.search_scans.outputs.has_scans == 'true'
+      run: |
+        set -euo pipefail
+        processing_mode="${{ steps.resolve_projects.outputs.processing_mode }}"
+        component_count="${{ steps.resolve_projects.outputs.component_count }}"
+        total_projects="${{ steps.resolve_projects.outputs.total_projects }}"
+        successful_downloads="${{ steps.download_results.outputs.successful_downloads }}"
+        eligible_count="${{ steps.analyze_results.outputs.eligible_count }}"
+        blocked_count="${{ steps.analyze_results.outputs.blocked_count }}"
+        
+        cat > scan_results/README.md << EOF
+        # BDBA Security Scan Summary - $processing_mode Mode
+        
+        **Scan Date:** $(date)
+        **Processing Mode:** $processing_mode
+        **Components Processed:** $component_count
+        **Total SDL-E Projects:** $total_projects
+        
+        ## Processing Summary
+        - Components searched: $component_count
+        - Successful downloads: $successful_downloads
+        - Eligible for upload: $eligible_count
+        - Blocked from upload: $blocked_count
+        
+        ## Reports Generated
+        $([ -f "$RUN_TMP_DIR/successful_downloads.txt" ] && echo "### Downloaded Reports:" && while IFS='|' read -r comp pdf pid name; do echo "- $comp: $pdf"; done < "$RUN_TMP_DIR/successful_downloads.txt")
+        
+        ## Upload Results
+        $([ -f "$RUN_TMP_DIR/upload_results.txt" ] && echo "### SDL-E Uploads:" && while IFS='|' read -r comp proj status file; do echo "- [$status] $comp -> Project $proj"; done < "$RUN_TMP_DIR/upload_results.txt")
+        
+        ## Components Analysis
+        $([ "$eligible_count" -gt 0 ] && echo "### Uploaded Components:" && echo '${{ steps.analyze_results.outputs.components_to_upload_json }}' | jq -r '.[] | "- \(.)"')
+        $([ "$blocked_count" -gt 0 ] && echo "### Blocked Components (Security Issues):" && echo '${{ steps.analyze_results.outputs.components_to_skip_json }}' | jq -r '.[] | "- \(.)"')
+               
+        ## Files Available in Artifacts
+        $(find scan_results \( -name "*.pdf" -o -name "*.csv" \) | sed 's/^/- /')
+        EOF
+        
+        echo "Generated comprehensive summary: scan_results/README.md"
+    - name: Upload Scan Results
+      if: steps.search_scans.outputs.has_scans == 'true'
+      uses: actions/upload-artifact@08396203c179e13c71b9754ce3472ed71842eec0 # v4.6.2
+      with:
+        name: bdba-scan-results-${{ github.run_number }}
+        path: scan_results/
+        retention-days: 60
+
+    - name: Check for Blocked Components and Set Exit Code
+      if: always()
+      run: |
+        set -euo pipefail
+        blocked_count="${{ steps.analyze_results.outputs.blocked_count }}"
+        components_to_skip_json='${{ steps.analyze_results.outputs.components_to_skip_json }}'
+        
+        if [ "$blocked_count" -gt 0 ]; then
+          echo ""
+          echo "[WARN] SECURITY ISSUES DETECTED"
+          echo "[ERROR] $blocked_count component(s) were blocked from upload due to security vulnerabilities:"
+          echo "$components_to_skip_json" | jq -r '.[]' | sed 's/^/   - /'
+          echo ""
+          echo "[INFO] Review the vulnerability reports in the artifacts for details"
+          echo "[ACTION] These components must be fixed before evidence can be uploaded"
+          echo ""
+          echo "[ERROR] Workflow failed due to blocked components"
+          exit 1
+        else
+          echo "[OK] No components were blocked - all scanned components were clean"
+        fi
+    - name: Display Results Summary
+      if: always()
+      run: |
+        set -euo pipefail
+        processing_mode="${{ steps.resolve_projects.outputs.processing_mode }}"
+        component_count="${{ steps.resolve_projects.outputs.component_count }}"
+        total_projects="${{ steps.resolve_projects.outputs.total_projects }}"
+        
+        echo "[INFO] BDBA scan complete - $processing_mode mode"
+        echo "[INFO] Components: $component_count | SDL-E Projects: $total_projects"
+        
+        if [ -d "scan_results" ] && [ "$(ls -A scan_results)" ]; then
+          echo ""
+          echo "[INFO] Scan results available in artifacts:"
+          
+          # Count files by type
+          pdf_count=$(find scan_results -name "*.pdf" | wc -l)
+          csv_count=$(find scan_results -name "*.csv" | wc -l)
+          
+          echo "  [INFO] PDF reports: $pdf_count"
+          echo "  [INFO] CSV reports: $csv_count"
+          
+          # Show upload summary if available
+          if [ -f "$RUN_TMP_DIR/upload_results.txt" ]; then
+            successful_uploads=$(awk -F'|' '$3=="SUCCESS"{count++} END {print count+0}' "$RUN_TMP_DIR/upload_results.txt")
+            failed_uploads=$(awk -F'|' '$3=="FAILED"{count++} END {print count+0}' "$RUN_TMP_DIR/upload_results.txt")
+            echo "  [OK] Successful SDL-E uploads: $successful_uploads"
+            echo "  [ERROR] Failed SDL-E uploads: $failed_uploads"
+          fi
+          
+          echo ""
+          echo "OK: BDBA scan workflow completed successfully"
+        else
+          echo "No scan results found"
+        fi
+    - name: Cleanup Temporary Files
+      if: always()
+      run: |
+        set -euo pipefail
+        rm -rf "$RUN_TMP_DIR"
