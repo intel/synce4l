@@ -86,7 +86,7 @@ on:
 jobs:
   sdle-bdba-scan:
     name: BDBA scan and SDL-E upload
-    runs-on: innersource.prod.amr.dind
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
       group: bdba-${{ github.workflow }}-${{ github.ref_name }}
