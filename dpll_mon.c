@@ -878,7 +878,8 @@ void dpll_mon_destroy(struct dpll_mon *dm)
 #ifdef UNIT_TESTS
 	dpll_mon_state_set(dm, DPLL_MON_STATE_STOPPED);
 #else
-	dpll_mon_state_set(dm, DPLL_MON_STATE_STOPPING);
+	if (dm->state >= DPLL_MON_STATE_INIT_READY)
+		dpll_mon_state_set(dm, DPLL_MON_STATE_STOPPING);
 #endif
 	while (dm->state == DPLL_MON_STATE_STOPPING)
 		usleep(THREAD_STOP_SLEEP_USEC);
