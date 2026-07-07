@@ -1,6 +1,9 @@
 # Changelog
 This file will carry any notable changes made to `synce4l` project.
 
+## 1.1.2 - 7th July 2026
+ * fix infinite loop in dpll_mon_destroy() without DPLL
+
 ## 1.1.1 - 1st July 2025
 * fix possible resource leak
 * fix requested thread stack size
