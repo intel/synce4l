@@ -18,7 +18,11 @@ else
 endif
 
 KERNEL_HEADERS = /usr/include
-ifeq ("$(wildcard $(KERNEL_HEADERS)/linux/dpll.h)", "")
+DPLL_HEADER = $(KERNEL_HEADERS)/linux/dpll.h
+ifeq ("$(wildcard $(DPLL_HEADER))", "")
+  INCLUDE_HEADERS = -Iheaders
+else ifeq ($(shell grep -c DPLL_A_PIN_OPERSTATE $(DPLL_HEADER) 2>/dev/null), 0)
+  # installed uapi header predates the pin operstate attribute
   INCLUDE_HEADERS = -Iheaders
 endif
 
