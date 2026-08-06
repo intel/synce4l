@@ -2,9 +2,10 @@
 /* Do not edit directly, auto-generated from: */
 /*	Documentation/netlink/specs/dpll.yaml */
 /* YNL-GEN uapi header */
+/* To regenerate run: tools/net/ynl/ynl-regen.sh */
 
-#ifndef _LINUX_DPLL_H
-#define _LINUX_DPLL_H
+#ifndef _UAPI_LINUX_DPLL_H
+#define _UAPI_LINUX_DPLL_H
 
 #define DPLL_FAMILY_NAME	"dpll"
 #define DPLL_FAMILY_VERSION	1
@@ -50,16 +51,70 @@ enum dpll_lock_status {
 	DPLL_LOCK_STATUS_MAX = (__DPLL_LOCK_STATUS_MAX - 1)
 };
 
+/**
+ * enum dpll_lock_status_error - if previous status change was done due to a
+ *   failure, this provides information of dpll device lock status error. Valid
+ *   values for DPLL_A_LOCK_STATUS_ERROR attribute
+ * @DPLL_LOCK_STATUS_ERROR_NONE: dpll device lock status was changed without
+ *   any error
+ * @DPLL_LOCK_STATUS_ERROR_UNDEFINED: dpll device lock status was changed due
+ *   to undefined error. Driver fills this value up in case it is not able to
+ *   obtain suitable exact error type.
+ * @DPLL_LOCK_STATUS_ERROR_MEDIA_DOWN: dpll device lock status was changed
+ *   because of associated media got down. This may happen for example if dpll
+ *   device was previously locked on an input pin of type
+ *   PIN_TYPE_SYNCE_ETH_PORT.
+ * @DPLL_LOCK_STATUS_ERROR_FRACTIONAL_FREQUENCY_OFFSET_TOO_HIGH: the FFO
+ *   (Fractional Frequency Offset) between the RX and TX symbol rate on the
+ *   media got too high. This may happen for example if dpll device was
+ *   previously locked on an input pin of type PIN_TYPE_SYNCE_ETH_PORT.
+ */
+enum dpll_lock_status_error {
+	DPLL_LOCK_STATUS_ERROR_NONE = 1,
+	DPLL_LOCK_STATUS_ERROR_UNDEFINED,
+	DPLL_LOCK_STATUS_ERROR_MEDIA_DOWN,
+	DPLL_LOCK_STATUS_ERROR_FRACTIONAL_FREQUENCY_OFFSET_TOO_HIGH,
+
+	/* private: */
+	__DPLL_LOCK_STATUS_ERROR_MAX,
+	DPLL_LOCK_STATUS_ERROR_MAX = (__DPLL_LOCK_STATUS_ERROR_MAX - 1)
+};
+
+/*
+ * level of quality of a clock device. This mainly applies when the dpll
+ * lock-status is DPLL_LOCK_STATUS_HOLDOVER. The current list is defined
+ * according to the table 11-7 contained in ITU-T G.8264/Y.1364 document. One
+ * may extend this list freely by other ITU-T defined clock qualities, or
+ * different ones defined by another standardization body (for those, please
+ * use different prefix).
+ */
+enum dpll_clock_quality_level {
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_PRC = 1,
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_SSU_A,
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_SSU_B,
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EEC1,
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_PRTC,
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EPRTC,
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EEEC,
+	DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EPRC,
+
+	/* private: */
+	__DPLL_CLOCK_QUALITY_LEVEL_MAX,
+	DPLL_CLOCK_QUALITY_LEVEL_MAX = (__DPLL_CLOCK_QUALITY_LEVEL_MAX - 1)
+};
+
 #define DPLL_TEMP_DIVIDER	1000
 
 /**
  * enum dpll_type - type of dpll, valid values for DPLL_A_TYPE attribute
  * @DPLL_TYPE_PPS: dpll produces Pulse-Per-Second signal
  * @DPLL_TYPE_EEC: dpll drives the Ethernet Equipment Clock
+ * @DPLL_TYPE_GENERIC: generic dpll type for devices outside PPS/EEC classes
  */
 enum dpll_type {
 	DPLL_TYPE_PPS = 1,
 	DPLL_TYPE_EEC,
+	DPLL_TYPE_GENERIC,
 
 	/* private: */
 	__DPLL_TYPE_MAX,
@@ -74,6 +129,9 @@ enum dpll_type {
  * @DPLL_PIN_TYPE_SYNCE_ETH_PORT: ethernet port PHY's recovered clock
  * @DPLL_PIN_TYPE_INT_OSCILLATOR: device internal oscillator
  * @DPLL_PIN_TYPE_GNSS: GNSS recovered clock
+ * @DPLL_PIN_TYPE_INT_NCO: Device internal numerically controlled oscillator.
+ *   When connected as a DPLL input, the DPLL enters NCO mode where the output
+ *   frequency is adjusted by the host via the PTP clock interface.
  */
 enum dpll_pin_type {
 	DPLL_PIN_TYPE_MUX = 1,
@@ -81,6 +139,7 @@ enum dpll_pin_type {
 	DPLL_PIN_TYPE_SYNCE_ETH_PORT,
 	DPLL_PIN_TYPE_INT_OSCILLATOR,
 	DPLL_PIN_TYPE_GNSS,
+	DPLL_PIN_TYPE_INT_NCO,
 
 	/* private: */
 	__DPLL_PIN_TYPE_MAX,
@@ -126,19 +185,57 @@ enum dpll_pin_state {
 };
 
 /**
+ * enum dpll_pin_operstate - defines possible operational states of a pin with
+ *   respect to its parent DPLL device, valid values for DPLL_A_PIN_OPERSTATE
+ *   attribute
+ * @DPLL_PIN_OPERSTATE_ACTIVE: pin is qualified and actively used by the DPLL
+ * @DPLL_PIN_OPERSTATE_STANDBY: pin is qualified but not actively used by the
+ *   DPLL
+ * @DPLL_PIN_OPERSTATE_NO_SIGNAL: pin does not have a valid signal
+ * @DPLL_PIN_OPERSTATE_QUAL_FAILED: pin signal failed qualification (e.g.
+ *   frequency or phase monitor)
+ */
+enum dpll_pin_operstate {
+	DPLL_PIN_OPERSTATE_ACTIVE = 1,
+	DPLL_PIN_OPERSTATE_STANDBY,
+	DPLL_PIN_OPERSTATE_NO_SIGNAL,
+	DPLL_PIN_OPERSTATE_QUAL_FAILED,
+
+	/* private: */
+	__DPLL_PIN_OPERSTATE_MAX,
+	DPLL_PIN_OPERSTATE_MAX = (__DPLL_PIN_OPERSTATE_MAX - 1)
+};
+
+/**
  * enum dpll_pin_capabilities - defines possible capabilities of a pin, valid
  *   flags on DPLL_A_PIN_CAPABILITIES attribute
  * @DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE: pin direction can be changed
  * @DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE: pin priority can be changed
  * @DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE: pin state can be changed
+ * @DPLL_PIN_CAPABILITIES_STATE_CONNECTED_OVERRIDE: pin state can be set to
+ *   connected regardless of current DPLL device mode, overriding the active
+ *   input selection. Requires state-can-change to be set as well.
  */
 enum dpll_pin_capabilities {
 	DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE = 1,
 	DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE = 2,
 	DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE = 4,
+	DPLL_PIN_CAPABILITIES_STATE_CONNECTED_OVERRIDE = 8,
 };
 
-#define DPLL_PHASE_OFFSET_DIVIDER	1000
+#define DPLL_PHASE_OFFSET_DIVIDER		1000
+#define DPLL_PIN_MEASURED_FREQUENCY_DIVIDER	1000
+
+/**
+ * enum dpll_feature_state - Allow control (enable/disable) and status checking
+ *   over features.
+ * @DPLL_FEATURE_STATE_DISABLE: feature shall be disabled
+ * @DPLL_FEATURE_STATE_ENABLE: feature shall be enabled
+ */
+enum dpll_feature_state {
+	DPLL_FEATURE_STATE_DISABLE,
+	DPLL_FEATURE_STATE_ENABLE,
+};
 
 enum dpll_a {
 	DPLL_A_ID = 1,
@@ -150,6 +247,11 @@ enum dpll_a {
 	DPLL_A_LOCK_STATUS,
 	DPLL_A_TEMP,
 	DPLL_A_TYPE,
+	DPLL_A_LOCK_STATUS_ERROR,
+	DPLL_A_CLOCK_QUALITY_LEVEL,
+	DPLL_A_PHASE_OFFSET_MONITOR,
+	DPLL_A_PHASE_OFFSET_AVG_FACTOR,
+	DPLL_A_FREQUENCY_MONITOR,
 
 	__DPLL_A_MAX,
 	DPLL_A_MAX = (__DPLL_A_MAX - 1)
@@ -179,6 +281,15 @@ enum dpll_a_pin {
 	DPLL_A_PIN_PHASE_ADJUST_MAX,
 	DPLL_A_PIN_PHASE_ADJUST,
 	DPLL_A_PIN_PHASE_OFFSET,
+	DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET,
+	DPLL_A_PIN_ESYNC_FREQUENCY,
+	DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED,
+	DPLL_A_PIN_ESYNC_PULSE,
+	DPLL_A_PIN_REFERENCE_SYNC,
+	DPLL_A_PIN_PHASE_ADJUST_GRAN,
+	DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET_PPT,
+	DPLL_A_PIN_MEASURED_FREQUENCY,
+	DPLL_A_PIN_OPERSTATE,
 
 	__DPLL_A_PIN_MAX,
 	DPLL_A_PIN_MAX = (__DPLL_A_PIN_MAX - 1)
@@ -204,4 +315,4 @@ enum dpll_cmd {
 
 #define DPLL_MCGRP_MONITOR	"monitor"
 
-#endif /* _LINUX_DPLL_H */
+#endif /* _UAPI_LINUX_DPLL_H */
