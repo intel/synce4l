@@ -56,6 +56,7 @@ struct dpll_mon_pin {
 	const char *ifname;
 	enum dpll_pin_type type;
 	enum dpll_pin_state state;
+	enum dpll_pin_operstate operstate;
 	uint32_t prio;
 	uint32_t id;
 	int if_index;
@@ -63,6 +64,7 @@ struct dpll_mon_pin {
 	int muxed;
 	int ready;
 	uint32_t parent_used_by;
+	uint32_t child_id;
 	int prio_valid;
 	int id_requested;
 
@@ -240,6 +242,7 @@ static struct dpll_mon_pin *pin_create(void)
 	}
 	pr_debug("%s %p", __func__, pin);
 	pin->parent_used_by = PARENT_NOT_USED;
+	pin->child_id = PARENT_NOT_USED;
 	pin->id = -1;
 	STAILQ_INIT(&pin->parents);
 
@@ -275,7 +278,8 @@ static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 		       int exist, int notify)
 {
 	int dpll_id_valid = 0, pin_state_valid = 0, prio_valid = 0, rem;
-	uint32_t dpll_id, pin_state, prio;
+	int operstate_valid = 0;
+	uint32_t dpll_id, pin_state, prio, operstate;
 	struct dpll_mon_pin *pin;
 	struct nlattr *an;
 
@@ -299,6 +303,10 @@ static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 		case DPLL_A_PIN_PRIO:
 			prio = nla_get_u32(an);
 			prio_valid = 1;
+			break;
+		case DPLL_A_PIN_OPERSTATE:
+			operstate = nla_get_u32(an);
+			operstate_valid = 1;
 			break;
 		default:
 			break;
@@ -335,6 +343,11 @@ static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 			pr_debug("new pin prio %u for pin_id:%u", prio, pin_id);
 			pin->prio = prio;
 		}
+	}
+	if (operstate_valid && pin->operstate != operstate) {
+		pr_debug("new pin operstate %u for pin_id:%u", operstate,
+			 pin_id);
+		pin->operstate = operstate;
 	}
 }
 
@@ -420,6 +433,16 @@ static void update_muxed_pin(struct dpll_mon *dm, uint32_t pin_id,
 			nl_dpll_pin_state_set(dm->dev_sk, dm->family,
 					      parent->id, dm->dpll_id,
 					      DPLL_PIN_STATE_SELECTABLE);
+	} else if (parent->valid == PIN_VALID) {
+		/*
+		 * Cross-device mux (e.g. E825): the configured source pin
+		 * (parent) is owned by a different dpll (ice, different
+		 * clock_id/module) but feeds this monitored-device input pin
+		 * through a mux. Selection is driven through the configured
+		 * source pin, connecting it to this monitored child input.
+		 */
+		parent->child_id = pin->id;
+		parent->muxed = 1;
 	}
 	if (pin_state_valid)
 		parent_state_set(pin, parent_pin_id, pin_state);
@@ -995,17 +1018,39 @@ error:
 	return NULL;
 }
 
+/*
+ * A pin is the selected reference of its DPLL either when the driver marks
+ * its state CONNECTED (e.g. WPC/ice) or when it reports operstate ACTIVE
+ * while keeping the state SELECTABLE (e.g. zl3073x in automatic mode).
+ */
+static int pin_selected(struct dpll_mon_pin *pin)
+{
+	return pin && (pin->operstate == DPLL_PIN_OPERSTATE_ACTIVE ||
+		       pin->state == DPLL_PIN_STATE_CONNECTED);
+}
+
 int dpll_mon_pin_is_active(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 {
 	struct dpll_mon_pin *parent;
 	struct parent_pin *pp;
 
+	if (pin->child_id != PARENT_NOT_USED) {
+		struct dpll_mon_pin *child = find_pin(dm, pin->child_id);
+
+		if (!child)
+			return 0;
+		STAILQ_FOREACH(pp, &child->parents, list)
+			if (pp->id == pin->id)
+				return pp->state == DPLL_PIN_STATE_CONNECTED &&
+				       pin_selected(child);
+		return 0;
+	}
 	if (!pin->muxed)
-		return pin->state == DPLL_PIN_STATE_CONNECTED;
+		return pin_selected(pin);
 	STAILQ_FOREACH(pp, &pin->parents, list)
 		if (pp->state == DPLL_PIN_STATE_CONNECTED) {
 			parent = find_pin(dm, pp->id);
-			if (parent->state == DPLL_PIN_STATE_CONNECTED)
+			if (pin_selected(parent))
 				return 1;
 		}
 	return 0;
@@ -1040,6 +1085,8 @@ int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 
 	if (pin->prio_valid)
 		return set_prio(dm, pin->id, dm->dev_dnu_prio);
+	if (pin->child_id != PARENT_NOT_USED)
+		return disconnect_parent(dm, pin->child_id, pin->id);
 	STAILQ_FOREACH(pp, &pin->parents, list) {
 		if (pp->state == DPLL_PIN_STATE_CONNECTED) {
 			parent = find_pin(dm, pp->id);
@@ -1063,6 +1110,13 @@ int dpll_mon_pin_prio_get(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 
 	if (pin->prio_valid) {
 		*prio = pin->prio;
+		return 0;
+	}
+	if (pin->child_id != PARENT_NOT_USED) {
+		parent = find_pin(dm, pin->child_id);
+		if (!parent)
+			return -EINVAL;
+		*prio = parent->prio;
 		return 0;
 	}
 	STAILQ_FOREACH(pp, &pin->parents, list) {
@@ -1089,6 +1143,12 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 	}
 	if (pin->prio_valid)
 		return set_prio(dm, pin->id, prio);
+	if (pin->child_id != PARENT_NOT_USED) {
+		ret = connect_parent(dm, pin->child_id, pin->id);
+		if (ret < 0)
+			return ret;
+		return set_prio(dm, pin->child_id, prio);
+	}
 
 	STAILQ_FOREACH(pp, &pin->parents, list) {
 		parent = find_pin(dm, pp->id);
