@@ -156,7 +156,17 @@ SyncE device (until next device section).
 | `eec_invalid_value`     | None    | string             | Value expected on stdout stream when EEC is in INVALID state, after calling command defined in get_eec_state_cmd                                                |
 | `clock_id`              | None    | `0-MAX(u64)`       | Required when Linux dpll subsystem shall be used to control EEC, it refers to clock_id value of EEC type dpll in the system                                     |
 | `module_name`           | None    | string             | Required when Linux dpll subsystem shall be used to control EEC, it refers to name of kernel module that registered the dpll device in the system               |
-| `dnu_prio`              | 0xf     | `0-0xffff`         | Required for Autmatic mode dpll device when Linux dpll subsystem is used. Value of priority which shall be set for input pins, when the source is marked as DNU |
+| `dnu_prio`              | unset   | `0-0xffff`         | Optional. Only for dpll devices that reserve one priority value in their table to mean "do not use" (e.g. ice/WPC, value 0xf). Leave unset for devices that have no such reserved value (e.g. zl3073x) - see note below.                        |
+
+> *Note on `dnu_prio`:* some dpll mux devices (e.g. ice/WPC) dedicate one priority
+> value to mark a deselected input pin as "do not use" (DNU); `dnu_prio` must be
+> set to exactly that value, or synce4l may treat a real, in-use priority as DNU
+> or vice versa. Other devices (e.g. zl3073x, as used on the E825 external DPLL)
+> have no such reserved value in their priority range, so `dnu_prio` must be left
+> unset there. When unset, synce4l does not touch pin priority to park a
+> deselected source; instead it sets the pin's dpll device state to
+> `DISCONNECTED` (and back to `SELECTABLE` when it becomes usable again), per
+> the DPLL UAPI.
 
 ### Port section
 

@@ -25,6 +25,7 @@
 #define PIN_VALID		1
 #define PARENT_VALID		2
 #define PARENT_NOT_USED		0xffffffff
+#define DNU_PRIO_NOT_SET	0xffffffff
 
 enum dpll_mon_state {
 	DPLL_MON_STATE_INVALID,
@@ -56,6 +57,7 @@ struct dpll_mon_pin {
 	const char *ifname;
 	enum dpll_pin_type type;
 	enum dpll_pin_state state;
+	enum dpll_pin_operstate operstate;
 	uint32_t prio;
 	uint32_t id;
 	int if_index;
@@ -63,6 +65,7 @@ struct dpll_mon_pin {
 	int muxed;
 	int ready;
 	uint32_t parent_used_by;
+	uint32_t child_id;
 	int prio_valid;
 	int id_requested;
 
@@ -85,6 +88,9 @@ struct dpll_mon {
 	struct nl_sock *rt_sk;
 	struct sk_arg rt_args;
 	uint32_t dev_dnu_prio;
+	int (*pin_disable)(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+	int (*pin_enable)(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+	int (*pin_disabled)(struct dpll_mon *dm, struct dpll_mon_pin *pin);
 	int init_err;
 	pthread_mutex_t lock;
 
@@ -131,6 +137,14 @@ static void dpll_mon_state_set(struct dpll_mon *dm, enum dpll_mon_state state)
 	pr_debug("dpll mon for %s new state: %d", dm->name, state);
 }
 
+static int pin_disable_prio(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+static int pin_enable_prio(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+static int pin_disabled_prio(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+static int pin_disable_state(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+static int pin_enable_state(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+static int pin_disabled_state(struct dpll_mon *dm, struct dpll_mon_pin *pin);
+static int dnu_prio_used(struct dpll_mon *dm);
+
 struct dpll_mon *dpll_mon_create(uint64_t clock_id, const char *module_name,
 				 const char *dev_name, uint32_t dnu_prio)
 {
@@ -144,6 +158,22 @@ struct dpll_mon *dpll_mon_create(uint64_t clock_id, const char *module_name,
 	dm->module_name = module_name;
 	dm->name = dev_name;
 	dm->dev_dnu_prio = dnu_prio;
+	/*
+	 * Pick how an unused source is parked: NICs that reserve a highest
+	 * "do-not-use" priority value (e.g. ice) configure dnu_prio and use the
+	 * legacy priority based parking; devices without such a value (e.g.
+	 * zl3073x) leave it unset and park a source by setting its dpll device
+	 * pin state to DISCONNECTED, per the DPLL UAPI.
+	 */
+	if (dnu_prio != DNU_PRIO_NOT_SET) {
+		dm->pin_disable = pin_disable_prio;
+		dm->pin_enable = pin_enable_prio;
+		dm->pin_disabled = pin_disabled_prio;
+	} else {
+		dm->pin_disable = pin_disable_state;
+		dm->pin_enable = pin_enable_state;
+		dm->pin_disabled = pin_disabled_state;
+	}
 	dpll_mon_state_set(dm, DPLL_MON_STATE_CREATED);
 
 	return dm;
@@ -240,6 +270,7 @@ static struct dpll_mon_pin *pin_create(void)
 	}
 	pr_debug("%s %p", __func__, pin);
 	pin->parent_used_by = PARENT_NOT_USED;
+	pin->child_id = PARENT_NOT_USED;
 	pin->id = -1;
 	STAILQ_INIT(&pin->parents);
 
@@ -275,7 +306,8 @@ static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 		       int exist, int notify)
 {
 	int dpll_id_valid = 0, pin_state_valid = 0, prio_valid = 0, rem;
-	uint32_t dpll_id, pin_state, prio;
+	int operstate_valid = 0;
+	uint32_t dpll_id, pin_state, prio, operstate;
 	struct dpll_mon_pin *pin;
 	struct nlattr *an;
 
@@ -299,6 +331,10 @@ static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 		case DPLL_A_PIN_PRIO:
 			prio = nla_get_u32(an);
 			prio_valid = 1;
+			break;
+		case DPLL_A_PIN_OPERSTATE:
+			operstate = nla_get_u32(an);
+			operstate_valid = 1;
 			break;
 		default:
 			break;
@@ -324,7 +360,15 @@ static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 		pr_debug("new pin state %u for pin_id:%u", pin_state, pin_id);
 		pin->state = pin_state;
 
-		if (pin->valid && pin->state == DPLL_PIN_STATE_DISCONNECTED)
+		/*
+		 * Legacy (dnu_prio) devices never park a source by disconnecting
+		 * it, so a valid pin seen DISCONNECTED there is unexpected and is
+		 * forced back to SELECTABLE, as before. Devices using the newer
+		 * state based parking deliberately disconnect unused pins, so this
+		 * safety net does not apply to them.
+		 */
+		if (pin->valid && pin->state == DPLL_PIN_STATE_DISCONNECTED &&
+		    dnu_prio_used(dm))
 			nl_dpll_pin_state_set(dm->dev_sk, dm->family,
 					      pin->id, dm->dpll_id,
 					      DPLL_PIN_STATE_SELECTABLE);
@@ -335,6 +379,11 @@ static void update_pin(struct dpll_mon *dm, uint32_t pin_id, struct nlattr *a,
 			pr_debug("new pin prio %u for pin_id:%u", prio, pin_id);
 			pin->prio = prio;
 		}
+	}
+	if (operstate_valid && pin->operstate != operstate) {
+		pr_debug("new pin operstate %u for pin_id:%u", operstate,
+			 pin_id);
+		pin->operstate = operstate;
 	}
 }
 
@@ -420,6 +469,16 @@ static void update_muxed_pin(struct dpll_mon *dm, uint32_t pin_id,
 			nl_dpll_pin_state_set(dm->dev_sk, dm->family,
 					      parent->id, dm->dpll_id,
 					      DPLL_PIN_STATE_SELECTABLE);
+	} else if (parent->valid == PIN_VALID) {
+		/*
+		 * Cross-device mux (e.g. E825): the configured source pin
+		 * (parent) is owned by a different dpll (ice, different
+		 * clock_id/module) but feeds this monitored-device input pin
+		 * through a mux. Selection is driven through the configured
+		 * source pin, connecting it to this monitored child input.
+		 */
+		parent->child_id = pin->id;
+		parent->muxed = 1;
 	}
 	if (pin_state_valid)
 		parent_state_set(pin, parent_pin_id, pin_state);
@@ -485,14 +544,28 @@ static int pins_ready(struct dpll_mon *dm)
 	return 1;
 }
 
+/*
+ * A user configured dnu_prio selects the legacy, priority based way of parking
+ * an unused source (used by NICs that reserve a highest priority value as
+ * "do-not-use", e.g. ice). Devices that do not expose such a value (e.g.
+ * zl3073x) leave dnu_prio unset; there a source is parked by setting its
+ * dpll device pin state to DISCONNECTED, per the DPLL UAPI.
+ */
+static int dnu_prio_used(struct dpll_mon *dm)
+{
+	return dm->dev_dnu_prio != DNU_PRIO_NOT_SET;
+}
+
 static int pins_dnu(struct dpll_mon *dm)
 {
 	struct dpll_mon_pin *pin;
 
 	STAILQ_FOREACH(pin, &dm->pins, list) {
-		if (pin->prio_valid && pin->prio != dm->dev_dnu_prio) {
-			pr_debug("not expected pin id:%u prio: %u",
-				 pin->id, pin->prio);
+		if (!pin->prio_valid)
+			continue;
+		if (!dm->pin_disabled(dm, pin)) {
+			pr_debug("pin id:%u not parked (state:%u prio:%u)",
+				 pin->id, pin->state, pin->prio);
 			return 0;
 		}
 	}
@@ -995,17 +1068,39 @@ error:
 	return NULL;
 }
 
+/*
+ * A pin is the selected reference of its DPLL either when the driver marks
+ * its state CONNECTED (e.g. WPC/ice) or when it reports operstate ACTIVE
+ * while keeping the state SELECTABLE (e.g. zl3073x in automatic mode).
+ */
+static int pin_selected(struct dpll_mon_pin *pin)
+{
+	return pin && (pin->operstate == DPLL_PIN_OPERSTATE_ACTIVE ||
+		       pin->state == DPLL_PIN_STATE_CONNECTED);
+}
+
 int dpll_mon_pin_is_active(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 {
 	struct dpll_mon_pin *parent;
 	struct parent_pin *pp;
 
+	if (pin->child_id != PARENT_NOT_USED) {
+		struct dpll_mon_pin *child = find_pin(dm, pin->child_id);
+
+		if (!child)
+			return 0;
+		STAILQ_FOREACH(pp, &child->parents, list)
+			if (pp->id == pin->id)
+				return pp->state == DPLL_PIN_STATE_CONNECTED &&
+				       pin_selected(child);
+		return 0;
+	}
 	if (!pin->muxed)
-		return pin->state == DPLL_PIN_STATE_CONNECTED;
+		return pin_selected(pin);
 	STAILQ_FOREACH(pp, &pin->parents, list)
 		if (pp->state == DPLL_PIN_STATE_CONNECTED) {
 			parent = find_pin(dm, pp->id);
-			if (parent->state == DPLL_PIN_STATE_CONNECTED)
+			if (pin_selected(parent))
 				return 1;
 		}
 	return 0;
@@ -1032,6 +1127,67 @@ int set_prio(struct dpll_mon *dm, uint32_t pin_id, uint32_t prio)
 				    dm->dpll_id, prio);
 }
 
+static int disconnect_pin(struct dpll_mon *dm, uint32_t pin_id)
+{
+	return nl_dpll_pin_state_set(dm->dev_sk, dm->family, pin_id,
+				    dm->dpll_id, DPLL_PIN_STATE_DISCONNECTED);
+}
+
+static int select_pin(struct dpll_mon *dm, uint32_t pin_id)
+{
+	return nl_dpll_pin_state_set(dm->dev_sk, dm->family, pin_id,
+				    dm->dpll_id, DPLL_PIN_STATE_SELECTABLE);
+}
+
+/*
+ * Priority based parking (dnu_prio configured): the pin stays SELECTABLE and
+ * is parked/unparked by writing the reserved "do-not-use" priority. Enabling
+ * only needs the real priority the caller applies afterwards.
+ */
+static int pin_disable_prio(struct dpll_mon *dm, struct dpll_mon_pin *pin)
+{
+	if (pin->prio == dm->dev_dnu_prio)
+		return 0;
+	return set_prio(dm, pin->id, dm->dev_dnu_prio);
+}
+
+static int pin_enable_prio(struct dpll_mon *dm, struct dpll_mon_pin *pin)
+{
+	(void)dm;
+	(void)pin;
+	return 0;
+}
+
+static int pin_disabled_prio(struct dpll_mon *dm, struct dpll_mon_pin *pin)
+{
+	return pin->prio == dm->dev_dnu_prio;
+}
+
+/*
+ * State based parking (no dnu_prio): park a source by DISCONNECTED and enable
+ * it by SELECTABLE, per the DPLL UAPI. Both are skipped when the pin already
+ * holds the target state.
+ */
+static int pin_disable_state(struct dpll_mon *dm, struct dpll_mon_pin *pin)
+{
+	if (pin->state == DPLL_PIN_STATE_DISCONNECTED)
+		return 0;
+	return disconnect_pin(dm, pin->id);
+}
+
+static int pin_enable_state(struct dpll_mon *dm, struct dpll_mon_pin *pin)
+{
+	if (pin->state == DPLL_PIN_STATE_SELECTABLE)
+		return 0;
+	return select_pin(dm, pin->id);
+}
+
+static int pin_disabled_state(struct dpll_mon *dm, struct dpll_mon_pin *pin)
+{
+	(void)dm;
+	return pin->state == DPLL_PIN_STATE_DISCONNECTED;
+}
+
 int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 {
 	struct dpll_mon_pin *parent;
@@ -1039,7 +1195,9 @@ int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 	int ret;
 
 	if (pin->prio_valid)
-		return set_prio(dm, pin->id, dm->dev_dnu_prio);
+		return dm->pin_disable(dm, pin);
+	if (pin->child_id != PARENT_NOT_USED)
+		return disconnect_parent(dm, pin->child_id, pin->id);
 	STAILQ_FOREACH(pp, &pin->parents, list) {
 		if (pp->state == DPLL_PIN_STATE_CONNECTED) {
 			parent = find_pin(dm, pp->id);
@@ -1047,7 +1205,7 @@ int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 			ret = disconnect_parent(dm, pin->id, parent->id);
 			if (ret < 0)
 				return ret;
-			ret = set_prio(dm, parent->id, dm->dev_dnu_prio);
+			ret = dm->pin_disable(dm, parent);
 			if (ret < 0)
 				return ret;
 		}
@@ -1063,6 +1221,13 @@ int dpll_mon_pin_prio_get(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 
 	if (pin->prio_valid) {
 		*prio = pin->prio;
+		return 0;
+	}
+	if (pin->child_id != PARENT_NOT_USED) {
+		parent = find_pin(dm, pin->child_id);
+		if (!parent)
+			return -EINVAL;
+		*prio = parent->prio;
 		return 0;
 	}
 	STAILQ_FOREACH(pp, &pin->parents, list) {
@@ -1083,12 +1248,29 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 	struct parent_pin *pp;
 	int ret;
 
-	if (prio == dm->dev_dnu_prio) {
+	if (dnu_prio_used(dm) && prio == dm->dev_dnu_prio) {
 		pr_err("setting prio to DNU not allowed");
 		return -EINVAL;
 	}
-	if (pin->prio_valid)
+	if (pin->prio_valid) {
+		ret = dm->pin_enable(dm, pin);
+		if (ret < 0)
+			return ret;
 		return set_prio(dm, pin->id, prio);
+	}
+	if (pin->child_id != PARENT_NOT_USED) {
+		struct dpll_mon_pin *child = find_pin(dm, pin->child_id);
+
+		if (!child)
+			return -EINVAL;
+		ret = dm->pin_enable(dm, child);
+		if (ret < 0)
+			return ret;
+		ret = connect_parent(dm, pin->child_id, pin->id);
+		if (ret < 0)
+			return ret;
+		return set_prio(dm, pin->child_id, prio);
+	}
 
 	STAILQ_FOREACH(pp, &pin->parents, list) {
 		parent = find_pin(dm, pp->id);
@@ -1104,6 +1286,9 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 		parent = find_pin(dm, pp->id);
 		if (parent->parent_used_by != PARENT_NOT_USED)
 			continue;
+		ret = dm->pin_enable(dm, parent);
+		if (ret < 0)
+			return ret;
 		ret = connect_parent(dm, pin->id, parent->id);
 		if (ret < 0) {
 			pr_debug("failed to send connect request for pin:%u with parent: %u on %s",
