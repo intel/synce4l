@@ -196,7 +196,7 @@ struct config_item config_tab_synce[] = {
 	DEV_ITEM_STR("eec_invalid_value", NULL),
 	DEV_ITEM_U64("clock_id", 0, 0, 0xffffffffffffffff),
 	DEV_ITEM_STR("module_name", NULL),
-	DEV_ITEM_INT("dnu_prio", 15, 15, 0xffff),
+	DEV_ITEM_INT("dnu_prio", -1, -1, 0xffff),
 	PORT_ITEM_STR("allowed_qls", NULL),
 	PORT_ITEM_STR("allowed_ext_qls", NULL),
 	PORT_ITEM_STR("recover_clock_enable_cmd", NULL),
