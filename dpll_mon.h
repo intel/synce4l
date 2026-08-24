@@ -106,6 +106,17 @@ struct dpll_mon_pin
 int dpll_mon_pin_is_active(struct dpll_mon *dm, struct dpll_mon_pin *pin);
 
 /**
+ * Check if a port pin has no counterpart dpll pin in the system (e.g. the
+ * netdevice exists but the kernel reports no dpll pin for it). Such a pin is
+ * tx-only: synce4l keeps sending/receiving QL over ESMC on it, but never uses
+ * it as a recovered-clock input, so its priority/state is never touched.
+ *
+ * @param pin		Valid pointer to a pin.
+ * @return		0 - pin has a counterpart dpll pin, 1 - tx-only
+ */
+int dpll_mon_pin_tx_only(struct dpll_mon_pin *pin);
+
+/**
  * Request to set priority of a pin on a dpll controlled by dpll mon instance,
  * if pin is muxed and priority != dnu_prio, then set the priority on the
  * parent and change pin state (with the parent) to CONNECTED as long as there

@@ -572,7 +572,8 @@ static bool source_invalid(struct synce_clock_source *c)
 {
 	if (c->type == PORT)
 		return synce_port_is_rx_dnu(c->port) ||
-		       synce_port_rx_ql_failed(c->port);
+		       synce_port_rx_ql_failed(c->port) ||
+		       synce_port_tx_only(c->port);
 	return false;
 }
 
