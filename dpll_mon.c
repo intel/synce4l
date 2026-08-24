@@ -68,6 +68,7 @@ struct dpll_mon_pin {
 	uint32_t child_id;
 	int prio_valid;
 	int id_requested;
+	int no_pin;
 
 	STAILQ_HEAD(parents_head, parent_pin) parents;
 };
@@ -656,14 +657,36 @@ static int dpll_rt_recv(struct nl_msg *msg, void *arg)
 	info = nlmsg_data(nlh);
 	lock_mutex(dm, __func__);
 	pin = find_pin_by_if_index(dm, info->ifi_index);
-	if (!tb[IFLA_DPLL_PIN])
+	if (!tb[IFLA_DPLL_PIN]) {
+		/*
+		 * The netdevice exists but the kernel reports no dpll pin for
+		 * it (e.g. a port not wired to the dpll). Mark it tx-only: it
+		 * keeps sending/receiving QL over ESMC, but is never used as a
+		 * recovered-clock input, so no priority or state is ever set
+		 * on it.
+		 */
+		if (pin && !pin->no_pin) {
+			pin->no_pin = 1;
+			pin->ready = 1;
+			pr_info("no dpll pin found for port %s, using tx-only",
+				pin->ifname);
+		}
 		goto unlock;
+	}
 	nla_parse_nested(an, DPLL_A_PIN_ID, tb[IFLA_DPLL_PIN], NULL);
-	if (!an[DPLL_A_PIN_ID])
+	if (!an[DPLL_A_PIN_ID]) {
+		if (pin && !pin->no_pin) {
+			pin->no_pin = 1;
+			pin->ready = 1;
+			pr_info("no dpll pin id found for port %s, using tx-only",
+				pin->ifname);
+		}
 		goto unlock;
+	}
 	pin_id = nla_get_u32(an[DPLL_A_PIN_ID]);
 	if (pin) {
 		remove_no_ifname_pin(dm, pin_id, pin);
+		pin->no_pin = 0;
 		pin->id = pin_id;
 		pr_debug_pin("pin assigned id", pin);
 	} else {
@@ -1084,6 +1107,8 @@ int dpll_mon_pin_is_active(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 	struct dpll_mon_pin *parent;
 	struct parent_pin *pp;
 
+	if (pin->no_pin)
+		return 0;
 	if (pin->child_id != PARENT_NOT_USED) {
 		struct dpll_mon_pin *child = find_pin(dm, pin->child_id);
 
@@ -1104,6 +1129,11 @@ int dpll_mon_pin_is_active(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 				return 1;
 		}
 	return 0;
+}
+
+int dpll_mon_pin_tx_only(struct dpll_mon_pin *pin)
+{
+	return pin && pin->no_pin;
 }
 
 int disconnect_parent(struct dpll_mon *dm, uint32_t pin_id, uint32_t parent_id)
@@ -1194,6 +1224,8 @@ int dpll_mon_pin_prio_clear(struct dpll_mon *dm, struct dpll_mon_pin *pin)
 	struct parent_pin *pp;
 	int ret;
 
+	if (pin->no_pin)
+		return 0;
 	if (pin->prio_valid)
 		return dm->pin_disable(dm, pin);
 	if (pin->child_id != PARENT_NOT_USED)
@@ -1219,6 +1251,8 @@ int dpll_mon_pin_prio_get(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 	struct dpll_mon_pin *parent;
 	struct parent_pin *pp;
 
+	if (pin->no_pin)
+		return -EINVAL;
 	if (pin->prio_valid) {
 		*prio = pin->prio;
 		return 0;
@@ -1248,6 +1282,8 @@ int dpll_mon_pin_prio_set(struct dpll_mon *dm, struct dpll_mon_pin *pin,
 	struct parent_pin *pp;
 	int ret;
 
+	if (pin->no_pin)
+		return 0;
 	if (dnu_prio_used(dm) && prio == dm->dev_dnu_prio) {
 		pr_err("setting prio to DNU not allowed");
 		return -EINVAL;

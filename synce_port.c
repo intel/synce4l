@@ -468,6 +468,11 @@ int synce_port_is_active(struct dpll_mon *dpll_mon, struct synce_port *port)
 	return dpll_mon_pin_is_active(dpll_mon, port->pin);
 }
 
+int synce_port_tx_only(struct synce_port *port)
+{
+	return dpll_mon_pin_tx_only(port->pin);
+}
+
 int synce_port_prio_set(struct dpll_mon *dpll_mon, struct synce_port *port,
 			uint32_t prio)
 {

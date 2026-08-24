@@ -179,6 +179,16 @@ void synce_port_invalidate_rx_ql(struct synce_port *port);
 int synce_port_is_active(struct dpll_mon *dpll_mon, struct synce_port *port);
 
 /**
+ * Check if port has no counterpart dpll pin in the system, meaning it is
+ * tx-only: QL is still sent/received over ESMC, but it is never used as a
+ * recovered-clock input (no priority or state is ever set on it).
+ *
+ * @param port		Questioned instance
+ * @return		0 - port has a dpll pin, 1 - tx-only
+ */
+int synce_port_tx_only(struct synce_port *port);
+
+/**
  * request to set priority of a port pin on a dpll, if pin is muxed
  * and priority != dnu_prio, then set the priority on the parent and change pin
  * state (with the parent) to CONNECTED as long as there is not yet used parent
