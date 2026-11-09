@@ -349,7 +349,8 @@ return_response:
 		if (tlv_array)
 			free((void *)tlv_array);
 
-		if (!ret && write(new_socket, response, resp_len) != resp_len)
+		if (!ret && send(new_socket, response, resp_len, MSG_NOSIGNAL) !=
+		    resp_len)
 			ret = -1;
 		close(new_socket);
 	}
