@@ -173,7 +173,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 				synce_manager_generate_err_tlv(err_tlv, "missing ext_src name");
 				return;
 			}
-			if (tlv_array[i].length > sizeof(uint8_t)) {
+			if (tlv_array[i].length != sizeof(uint8_t)) {
 				synce_manager_generate_err_tlv(err_tlv, "Bad QL value");
 				return;
 			}
@@ -185,7 +185,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 				synce_manager_generate_err_tlv(err_tlv, "missing ext_src name");
 				return;
 			}
-			if (tlv_array[i].length > sizeof(uint8_t)) {
+			if (tlv_array[i].length != sizeof(uint8_t)) {
 				synce_manager_generate_err_tlv(err_tlv, "Bad QL value");
 				return;
 			}
