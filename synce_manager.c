@@ -148,6 +148,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 			break;
 		case MSG_GET_QL:
 			synce_dev_get_ql(dev, &val);
+			free(tlv_array[i].value);
 			tlv_array[i].length = sizeof(uint8_t);
 			tlv_array[i].value = malloc(sizeof(uint8_t));
 			if (!tlv_array[i].value) {
@@ -159,6 +160,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 			break;
 		case MSG_GET_EXT_QL:
 			synce_dev_get_ext_ql(dev, &val);
+			free(tlv_array[i].value);
 			tlv_array[i].length = sizeof(uint8_t);
 			tlv_array[i].value = malloc(sizeof(uint8_t));
 			if (!tlv_array[i].value) {
@@ -173,7 +175,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 				synce_manager_generate_err_tlv(err_tlv, "missing ext_src name");
 				return;
 			}
-			if (tlv_array[i].length > sizeof(uint8_t)) {
+			if (tlv_array[i].length != sizeof(uint8_t)) {
 				synce_manager_generate_err_tlv(err_tlv, "Bad QL value");
 				return;
 			}
@@ -185,7 +187,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 				synce_manager_generate_err_tlv(err_tlv, "missing ext_src name");
 				return;
 			}
-			if (tlv_array[i].length > sizeof(uint8_t)) {
+			if (tlv_array[i].length != sizeof(uint8_t)) {
 				synce_manager_generate_err_tlv(err_tlv, "Bad QL value");
 				return;
 			}
@@ -284,6 +286,7 @@ static void *synce_manager_server_thread(void *arg)
 		memset(command, 0, sizeof(command));
 		tlv_array = NULL;
 		err_tlv = NULL;
+		tlv_num = 0;
 
 		new_socket = accept(server_fd, (struct sockaddr *)&client,
 				    (socklen_t *)&addrlen);
@@ -349,7 +352,8 @@ return_response:
 		if (tlv_array)
 			free((void *)tlv_array);
 
-		if (!ret && write(new_socket, response, resp_len) != resp_len)
+		if (!ret && send(new_socket, response, resp_len, MSG_NOSIGNAL) !=
+		    resp_len)
 			ret = -1;
 		close(new_socket);
 	}
