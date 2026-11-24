@@ -148,6 +148,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 			break;
 		case MSG_GET_QL:
 			synce_dev_get_ql(dev, &val);
+			free(tlv_array[i].value);
 			tlv_array[i].length = sizeof(uint8_t);
 			tlv_array[i].value = malloc(sizeof(uint8_t));
 			if (!tlv_array[i].value) {
@@ -159,6 +160,7 @@ void synce_manager_execute_tlv_array(struct synce_manager_tlv *tlv_array,
 			break;
 		case MSG_GET_EXT_QL:
 			synce_dev_get_ext_ql(dev, &val);
+			free(tlv_array[i].value);
 			tlv_array[i].length = sizeof(uint8_t);
 			tlv_array[i].value = malloc(sizeof(uint8_t));
 			if (!tlv_array[i].value) {
