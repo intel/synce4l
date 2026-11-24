@@ -284,6 +284,7 @@ static void *synce_manager_server_thread(void *arg)
 		memset(command, 0, sizeof(command));
 		tlv_array = NULL;
 		err_tlv = NULL;
+		tlv_num = 0;
 
 		new_socket = accept(server_fd, (struct sockaddr *)&client,
 				    (socklen_t *)&addrlen);
