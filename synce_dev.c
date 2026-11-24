@@ -173,7 +173,7 @@ static void update_dev_state(struct synce_dev *dev)
 			 count, dev->num_ports, dev->name);
 		return;
 	} else {
-		if (dev->dpll_mon && dev->state != DEVICE_RUNNING)
+		if (dev->state != DEVICE_RUNNING)
 			dev->rebuild_prio = 1;
 		dev->state = DEVICE_RUNNING;
 	}
